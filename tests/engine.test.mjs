@@ -6,6 +6,8 @@
 import assert from "node:assert/strict";
 import { ENGINE_JS } from "../src/audio/engineSource.ts";
 
+const BAND_COUNT = 16;
+
 // ---- Web Audio stubs -------------------------------------------------------
 
 class AudioParam {
@@ -180,17 +182,17 @@ function findNode(ctx, predicate) {
   assert.ok(osc, "oscillator built");
   const chain = [];
   let n = osc;
-  for (let i = 0; i < 16 && n.outputs.length; i++) {
+  for (let i = 0; i < 24 && n.outputs.length; i++) {
     n = n.outputs[0];
     chain.push(n);
   }
-  // chain = toneGain, preamp, bq0..bq7, levelGain, ceiling, clipper, destination
+  // chain = toneGain, preamp, bq0..bq15, levelGain, ceiling, clipper, destination
   const toneGain = chain[0];
   assert.ok(toneGain && toneGain.gain, "toneGain wired first after osc");
-  const biquads = []; // chain.slice(2, 10)
-  for (let i = 2; i < 10; i++) assert.ok(chain[i].Q, `biquad at slot ${i}`);
-  biquads.push(...chain.slice(2, 10));
-  const levelGain = chain[10];
+  const biquads = []; // chain.slice(2, 18)
+  for (let i = 2; i < 2 + BAND_COUNT; i++) assert.ok(chain[i].Q, `biquad at slot ${i}`);
+  biquads.push(...chain.slice(2, 2 + BAND_COUNT));
+  const levelGain = chain[2 + BAND_COUNT];
   assert.ok(levelGain && levelGain.gain, "levelGain after biquads");
   const preamp = chain[1];
   assert.ok(preamp.gain, "preamp before biquads");
@@ -257,7 +259,7 @@ function findNode(ctx, predicate) {
   assert.equal(biquads[0].gain.events.at(-1).v, -3);
   assert.equal(biquads[1].type, "highshelf");
   assert.equal(biquads[1].frequency.events.at(-1).v, 6000);
-  for (let i = 2; i < 8; i++) {
+  for (let i = 2; i < BAND_COUNT; i++) {
     assert.equal(biquads[i].type, "peaking", `slot ${i} flat`);
     assert.equal(biquads[i].gain.events.at(-1).v, 0);
   }
@@ -270,7 +272,7 @@ function findNode(ctx, predicate) {
 }
 
 {
-  // the old block-4 checks stay: 8 biquads exist behind levelGain path
+  // the old block-4 checks stay: 16 biquads exist behind levelGain path
   const ctxs = [];
   class AC extends AudioContext {
     constructor() {
@@ -284,12 +286,12 @@ function findNode(ctx, predicate) {
   const osc = findNode(ctx, (n) => n.frequency && n.started);
   const chain = [];
   let n = osc;
-  for (let i = 0; i < 16 && n.outputs.length; i++) {
+  for (let i = 0; i < 24 && n.outputs.length; i++) {
     n = n.outputs[0];
     chain.push(n);
   }
   const biquads = chain.filter((x) => x.Q);
-  assert.equal(biquads.length, 8, `8 biquads, got ${biquads.length}`);
+  assert.equal(biquads.length, BAND_COUNT, `${BAND_COUNT} biquads, got ${biquads.length}`);
 }
 
 console.log("engine.test.mjs — all passed");

@@ -162,24 +162,25 @@ const LevelRow = memo(function LevelRow() {
 const MarksCard = memo(function MarksCard({ onFull }: { onFull: () => void }) {
   const bands = useStoreSelector((st) => st.bands);
   const draft = useStoreSelector((st) => st.draft);
+  const bandLimit = useStoreSelector((st) => st.bandLimit);
   const pal = usePalette();
   const theme = useTheme();
 
-  const full = bands.length >= 8;
+  const full = bands.length >= bandLimit;
   const nextMark = MARK_ORDER.find((k) => draft[k] == null) || null;
   const topOnly = draft.top != null && draft.start == null && draft.end == null;
   const draftEmpty = draft.start == null && draft.top == null && draft.end == null;
 
   const mark = useCallback(
     (which: DraftMarkKey) => {
-      if (store.get().bands.length >= 8) {
+      if (store.get().bands.length >= bandLimit) {
         onFull();
         return;
       }
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
       store.mark(which);
     },
-    [onFull]
+    [bandLimit, onFull]
   );
 
   const setKind = useCallback((kind: Draft["kind"]) => {
@@ -320,6 +321,7 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
   // Only the header count and the volume gate track state at screen level;
   // the sweep lives in FreqStage below.
   const bands = useStoreSelector((st) => st.bands);
+  const bandLimit = useStoreSelector((st) => st.bandLimit);
   const levelDb = useStoreSelector((st) => st.levelDb);
   useKeepAwake();
 
@@ -358,8 +360,7 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
   }, [bands, showSnack]);
 
-  const full = bands.length >= 8;
-  const bandCountLabel = full ? "8 of 8" : `${bands.length} of 8`;
+  const bandCountLabel = `${bands.length} of ${bandLimit}`;
 
   const startTone = useCallback(() => {
     if (!engine.isStarted()) {
@@ -397,8 +398,8 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
   }, []);
 
   const fullNotice = useCallback(() => {
-    showSnack("8 of 8 · remove a band in Curve to add more");
-  }, [showSnack]);
+    showSnack(`${bandLimit} of ${bandLimit} · remove a band in Curve to add more`);
+  }, [showSnack, bandLimit]);
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>

@@ -1,10 +1,11 @@
 // The Web Audio engine that runs inside a hidden WebView.
 //
 // Why a WebView: the original site's audio is Web Audio API (oscillator +
-// gain envelopes + 8 biquads + a waveshaper clipper, with setTargetAtTime
-// glides). Running the same API inside a 1x1 WebView keeps the DSP behaviour
-// byte-for-byte equivalent to the website while letting the whole app stay
-// installable from Expo Go (no dev build). The UI around it is fully native.
+// gain envelopes + up to 16 biquads + a waveshaper clipper, with
+// setTargetAtTime glides). Running the same API inside a 1x1 WebView keeps
+// the DSP behaviour byte-for-byte equivalent to the website while letting the
+// whole app stay installable from Expo Go (no dev build). The UI around it is
+// fully native.
 //
 // If the project later moves to a development build, `@react-native-audio-api`
 // implements the same spec natively; only `engine.ts` would need to change.
@@ -16,7 +17,9 @@ export const ENGINE_JS = `
 (function () {
   'use strict';
 
-  var BANDS = 8;
+  // The graph always has 16 slots; the app's band-limit setting decides how
+  // many receive a band. Unused slots stay flat and cost almost nothing.
+  var BANDS = 16;
   var RAMP = 0.015;      // play/stop fade (s)
   var GLIDE_MIN = 0.012; // shortest frequency glide time constant (s)
   var GLIDE_MAX = 0.05;  // longest glide, for sparse/jittery bridge updates (s)

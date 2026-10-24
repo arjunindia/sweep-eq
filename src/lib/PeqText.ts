@@ -45,6 +45,7 @@ export function sessionToJson(state: AppState): string {
       selectedId: s.selectedId ?? null,
       draft: s.draft,
       themePref: s.themePref,
+      bandLimit: s.bandLimit,
     },
     null,
     2

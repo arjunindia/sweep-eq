@@ -54,21 +54,58 @@ function fresh() {
   assert.equal(s.get().bands[0].fc, 440);
 }
 
-// cap at 8 with refusal
+// default cap is 8; the Settings limit can raise it to 12/16
 {
   const s = fresh();
-  for (let i = 0; i < 8; i++) {
-    s.setFreq(100 * (i + 1));
+  assert.equal(s.get().bandLimit, 8);
+
+  const addBands = (n) => {
+    for (let i = 0; i < n; i++) {
+      s.setFreq(100 * (s.get().bands.length + 1));
+      s.mark("top");
+      s.commitDraft();
+    }
+  };
+
+  const refuse = () => {
+    s.setFreq(1000);
+    s.mark("start");
     s.mark("top");
-    s.commitDraft();
-  }
+    s.mark("end"); // auto-commit refused, draft dropped
+    assert.deepEqual(s.get().draft, { kind: "peak", start: null, top: null, end: null });
+  };
+
+  addBands(8);
   assert.equal(s.get().bands.length, 8);
-  s.setFreq(1000);
-  s.mark("start");
-  s.mark("top");
-  s.mark("end"); // auto-commit refused, draft dropped
+  refuse();
   assert.equal(s.get().bands.length, 8);
-  assert.deepEqual(s.get().draft, { kind: "peak", start: null, top: null, end: null });
+
+  s.setBandLimit(12);
+  assert.equal(s.get().bandLimit, 12);
+  addBands(4);
+  assert.equal(s.get().bands.length, 12);
+  refuse();
+  assert.equal(s.get().bands.length, 12);
+
+  s.setBandLimit(16);
+  assert.equal(s.get().bandLimit, 16);
+  addBands(4);
+  assert.equal(s.get().bands.length, 16);
+  refuse();
+  assert.equal(s.get().bands.length, 16);
+
+  // Can't lower the limit below the bands already present.
+  s.setBandLimit(8);
+  assert.equal(s.get().bandLimit, 16);
+
+  // A session with more bands than its stored limit raises the limit to fit.
+  const s2 = fresh();
+  s2.load({
+    bandLimit: 8,
+    bands: Array.from({ length: 12 }, (_, i) => ({ fc: 100 + i, gain: 0, q: 1 })),
+  });
+  assert.equal(s2.get().bands.length, 12);
+  assert.equal(s2.get().bandLimit, 12);
 }
 
 // updateBand clamps + rounding

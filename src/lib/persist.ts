@@ -18,7 +18,7 @@ let lastLogged = "";
 let verified = false;
 
 function summary(state: AppState): string {
-  return `bands=${state.bands.length} level=${state.levelDb} eq=${state.eqOn} preamp=${state.preampDb} theme=${state.themePref}`;
+  return `bands=${state.bands.length} limit=${state.bandLimit} level=${state.levelDb} eq=${state.eqOn} preamp=${state.preampDb} theme=${state.themePref}`;
 }
 
 async function persist(state: AppState): Promise<void> {

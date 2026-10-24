@@ -6,7 +6,10 @@
 
 import * as dsp from "./dsp.ts";
 
-export const MAX_BANDS = 8;
+export const MAX_BANDS = 16;
+export const DEFAULT_BAND_LIMIT = 8;
+export const BAND_LIMIT_OPTIONS = [8, 12, 16] as const;
+export type BandLimit = (typeof BAND_LIMIT_OPTIONS)[number];
 export const TYPES: BandType[] = ["PK", "LSC", "HSC"];
 
 export type BandType = "PK" | "LSC" | "HSC";
@@ -50,6 +53,7 @@ export interface AppState {
   draft: Draft;
   themePref: ThemePref;
   colorSource: ColorSource;
+  bandLimit: BandLimit;
 }
 
 let seq = 0;
@@ -100,7 +104,17 @@ export function defaultState(): AppState {
     draft: emptyDraft("peak"),
     themePref: "system",
     colorSource: "dynamic",
+    bandLimit: DEFAULT_BAND_LIMIT,
   };
+}
+
+function normalizeBandLimit(raw: unknown, bandCount: number): BandLimit {
+  const n = Number(raw);
+  const requested = (BAND_LIMIT_OPTIONS as readonly number[]).includes(n)
+    ? (n as BandLimit)
+    : DEFAULT_BAND_LIMIT;
+  const needed = Math.max(requested, bandCount);
+  return (BAND_LIMIT_OPTIONS.find((v) => v >= needed) ?? MAX_BANDS) as BandLimit;
 }
 
 function cleanBand(raw: unknown): Band | null {
@@ -154,6 +168,8 @@ export function validate(raw: unknown): AppState {
       ? s.selectedId
       : (null as string | null);
 
+  const bandLimit = normalizeBandLimit(s.bandLimit, bands.length);
+
   return normalize({
     version: 1,
     freq: num(s.freq, dsp.FMIN, dsp.FMAX, d.freq),
@@ -167,6 +183,7 @@ export function validate(raw: unknown): AppState {
     draft,
     themePref: s.themePref === "light" || s.themePref === "dark" ? s.themePref : "system",
     colorSource: s.colorSource === "brand" ? "brand" : "dynamic",
+    bandLimit,
   });
 }
 
@@ -190,6 +207,7 @@ export interface SweepStore {
   setPreampAuto(): AppState;
   setThemePref(t: ThemePref): AppState;
   setColorSource(source: ColorSource): AppState;
+  setBandLimit(limit: number): AppState;
   setDraftKind(kind: string): AppState;
   mark(which: string): AppState;
   commitDraft(): AppState;
@@ -224,7 +242,7 @@ export function createStore(initial: unknown): SweepStore {
     if (!spec) {
       return set({ ...state, draft });
     }
-    if (state.bands.length >= MAX_BANDS) {
+    if (state.bands.length >= state.bandLimit) {
       // refused: drop the draft so the panel does not stay half-marked
       return set({ ...state, draft: emptyDraft(draft.kind) });
     }
@@ -295,6 +313,16 @@ export function createStore(initial: unknown): SweepStore {
       const v: ColorSource = source === "brand" ? "brand" : "dynamic";
       if (v === state.colorSource) return state;
       return set({ ...state, colorSource: v });
+    },
+
+    setBandLimit(limit) {
+      const requested = (BAND_LIMIT_OPTIONS as readonly number[]).includes(limit)
+        ? (limit as BandLimit)
+        : DEFAULT_BAND_LIMIT;
+      const needed = Math.max(requested, state.bands.length);
+      const v = (BAND_LIMIT_OPTIONS.find((n) => n >= needed) ?? MAX_BANDS) as BandLimit;
+      if (v === state.bandLimit) return state;
+      return set({ ...state, bandLimit: v });
     },
 
     setDraftKind(kind) {

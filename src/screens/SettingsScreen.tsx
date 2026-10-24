@@ -17,7 +17,7 @@ import {
 } from "react-native-paper";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { hapticSelect } from "../lib/haptic.ts";
-import { store, type ColorSource, type ThemePref } from "../lib/store.ts";
+import { BAND_LIMIT_OPTIONS, store, type ColorSource, type ThemePref } from "../lib/store.ts";
 import { useStoreSelector } from "../hooks/useStore.ts";
 import { dynamicColorSupported, usePalette } from "../theme/theme.ts";
 import type { TabScreenProps } from "../nav/types.ts";
@@ -33,6 +33,8 @@ export function SettingsScreen(_props: TabScreenProps<"Settings">) {
   const insets = useSafeAreaInsets();
   const themePref = useStoreSelector((st) => st.themePref);
   const colorSource = useStoreSelector((st) => st.colorSource);
+  const bandLimit = useStoreSelector((st) => st.bandLimit);
+  const bandCount = useStoreSelector((st) => st.bands.length);
   const [dialog, setDialog] = useState<DialogKind>("none");
 
   const setThemePref = useCallback((pref: ThemePref) => {
@@ -42,6 +44,11 @@ export function SettingsScreen(_props: TabScreenProps<"Settings">) {
 
   const setColorSource = useCallback((source: ColorSource) => {
     store.setColorSource(source);
+    hapticSelect();
+  }, []);
+
+  const changeBandLimit = useCallback((limit: number) => {
+    store.setBandLimit(limit);
     hapticSelect();
   }, []);
 
@@ -106,6 +113,30 @@ export function SettingsScreen(_props: TabScreenProps<"Settings">) {
         </Surface>
 
         <Text variant="labelLarge" style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>
+          Bands
+        </Text>
+        <Surface mode="flat" style={[styles.card, { backgroundColor: pal.surfaceContainer }]}>
+          <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
+            Maximum bands
+          </Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 2, marginBottom: 12 }}>
+            The original 8-band limit is the default. Raise it to 12 or 16 to fit more corrections; some players cap how many filters they import.
+          </Text>
+          <SegmentedButtons
+            value={String(bandLimit)}
+            onValueChange={(v) => changeBandLimit(Number(v))}
+            buttons={BAND_LIMIT_OPTIONS.map((n) => ({
+              value: String(n),
+              label: String(n),
+              disabled: n < bandCount,
+            }))}
+          />
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+            {bandCount} band{bandCount === 1 ? "" : "s"} in this session. The limit can’t go below that.
+          </Text>
+        </Surface>
+
+        <Text variant="labelLarge" style={[styles.sectionLabel, { color: theme.colors.onSurfaceVariant }]}>
           Help & about
         </Text>
         <Surface mode="flat" style={[styles.listCard, { backgroundColor: pal.surfaceContainer }]}>
@@ -142,7 +173,7 @@ export function SettingsScreen(_props: TabScreenProps<"Settings">) {
               3. Mark the shape: Start at the left edge, Top at the middle, End at the right edge. The band is added automatically.
             </Text>
             <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              4. Repeat up to 8 bands, check the response on Curve, then paste the PEQ into your player.
+              4. Repeat up to {bandLimit} bands, check the response on Curve, then paste the PEQ into your player.
             </Text>
           </Dialog.Content>
           <Dialog.Actions>
@@ -155,7 +186,7 @@ export function SettingsScreen(_props: TabScreenProps<"Settings">) {
           <Dialog.Title>About</Dialog.Title>
           <Dialog.Content style={{ gap: 10 }}>
             <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
-              Sweep EQ is a mobile companion that finds parametric-EQ corrections for headphones by ear: a sine sweep you scrub across, three marks per problem you hear, and an exportable 8-band PEQ.
+              Sweep EQ is a mobile companion that finds parametric-EQ corrections for headphones by ear: a sine sweep you scrub across, three marks per problem you hear, and an exportable {bandLimit}-band PEQ.
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
               A task-specific port of “EQ by ear” by DMS (eqbyear.com), Apache-2.0. Unofficial; not affiliated. It uses the same DSP math and file format as the original site.

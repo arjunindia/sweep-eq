@@ -1,5 +1,6 @@
 // CurveScreen — see what the marks built: the summed response plot, the
-// band list (8 max) with quick toggles, and the preamp/EQ controls.
+// band list (up to the user-set limit) with quick toggles, and the preamp/EQ
+// controls.
 
 import { memo, useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -79,6 +80,7 @@ function CurveScreenInner({ navigation }: TabScreenProps<"Curve">) {
   const pal = usePalette();
   const insets = useSafeAreaInsets();
   const bands = useStoreSelector((st) => st.bands);
+  const bandLimit = useStoreSelector((st) => st.bandLimit);
   const selectedId = useStoreSelector((st) => st.selectedId);
   const eqOn = useStoreSelector((st) => st.eqOn);
   const preampDb = useStoreSelector((st) => st.preampDb);
@@ -87,7 +89,7 @@ function CurveScreenInner({ navigation }: TabScreenProps<"Curve">) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = bands.find((b) => b.id === editingId) || null;
   const editingIndex = bands.findIndex((b) => b.id === editingId);
-  const full = bands.length >= 8;
+  const full = bands.length >= bandLimit;
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
@@ -197,7 +199,7 @@ function CurveScreenInner({ navigation }: TabScreenProps<"Curve">) {
         {/* Bands */}
         <View style={styles.bandsHeader}>
           <Text variant="titleSmall" style={{ color: theme.colors.onSurface }}>
-            Bands · {bands.length} of 8{full ? " · remove one to add" : ""}
+            Bands · {bands.length} of {bandLimit}{full ? " · remove one to add" : ""}
           </Text>
         </View>
 

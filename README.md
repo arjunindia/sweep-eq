@@ -14,8 +14,9 @@ A mobile port of [DMS3tv's `eqbyear`](https://github.com/DMS3tv/eqbyear) ("EQ by
 rebuilt for Android with Expo and Material 3-style React Native UI. The same
 codebase also builds an unsigned iOS IPA for AltStore Classic. You listen to a
 sine sweep, place three marks on a log-frequency tape (where the problem starts,
-where it peaks, where it ends), and the app grows an 8-band parametric EQ that you
-can export as a PEQ text for your favourite player.
+where it peaks, where it ends), and the app grows a parametric EQ (8 bands by
+default, configurable up to 16) that you can export as PEQ text for your
+favourite player.
 
 **Trademark note:** the original project's Apache-2.0 license reserves the names
 "DMS" and "EQ by ear" plus its logo for derived works, so this port ships as
@@ -53,10 +54,11 @@ Navigation, SVG, WebView) is pure JS/native modules bundled with Expo Go.
   Gain … dB Q …`), byte-compatible with the website, so files load both ways.
   Sessions autosave to AsyncStorage (`sweep-eq:v1`) and can be shared as JSON.
 - **Settings tab** — choose the system/light/dark theme and, on Android 12+,
-  brand or wallpaper colors; open How it works and About.
+  brand or wallpaper colors; set the band limit (8, 12, or 16); open How it
+  works and About.
 
-Up to 8 bands, exactly like the original; `Undo` revises marks, then removes
-the newest band once the draft is empty.
+The original 8-band limit is the default; Settings can raise it to 12 or 16.
+`Undo` revises marks, then removes the newest band once the draft is empty.
 
 Colors follow Material You on Android 12+ by default (wallpaper-derived via
 `@expo/ui`), with a brand teal/amber palette available in the **Settings** tab
@@ -86,11 +88,11 @@ tests/                    node:test-free assert suites for dsp/store/PEQ/engine
 
 Audio lives in a one-pixel hidden `WebView` running a template page with the
 **exact** graph of the original engine: osc → tone gain (15 ms fades; 8 ms
-frequency glide) → preamp → 8 fixed biquads → level gain → ×0.5 ceiling →
-waveshaper clipper → destination. Commands (`start/play/stop/freq/level/eq`)
-are coalesced to the newest value every 40 ms. The tone always stops when the
-app leaves the foreground, and the gate dialog must be accepted once per
-session before any audio starts.
+frequency glide) → preamp → 16 fixed biquads (unused slots stay flat) → level
+gain → ×0.5 ceiling → waveshaper clipper → destination. Commands
+(`start/play/stop/freq/level/eq`) are coalesced to the newest value every
+40 ms. The tone always stops when the app leaves the foreground, and the gate
+dialog must be accepted once per session before any audio starts.
 
 *Escalation path:* for a native build later, swap the WebView bridge for
 `react-native-audio-api` (same graph, same node names) — the engine API
