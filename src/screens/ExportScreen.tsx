@@ -7,8 +7,11 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import {
   Button,
   Card,
+  Dialog,
   Icon,
+  Portal,
   Text,
+  TextInput,
   useTheme,
 } from "react-native-paper";
 import { usePalette } from "../theme/theme.ts";
@@ -16,10 +19,14 @@ import * as DocumentPicker from "expo-document-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   copyText,
+  saveTextToPickedLocation,
   sessionFromJson,
   sharePeq,
   shareSession,
+  shareWavelet,
   toPeqText,
+  toWaveletText,
+  WAVELET_FILENAME,
 } from "../lib/peq.ts";
 import { readTextFile } from "../lib/files.ts";
 import { store } from "../lib/store.ts";
@@ -39,8 +46,11 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
 
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState(WAVELET_FILENAME);
 
   const peq = useMemo(() => toPeqText({ ...store.get(), bands, preampDb }), [bands, preampDb]);
+  const wavelet = useMemo(() => toWaveletText({ ...store.get(), bands, preampDb }), [bands, preampDb]);
 
   const flash = (text: string, ms = 2600) => {
     setNote(text);
@@ -59,6 +69,36 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
     setBusy(null);
     flash(ok ? "" : "Sharing is not available on this device");
     if (!ok) flash("Sharing is not available on this device");
+  };
+
+  const doCopyWavelet = async () => {
+    void hapticSelect();
+    const ok = await copyText(wavelet);
+    flash(ok ? "GraphicEQ copied — import it in Wavelet → Presets → Manual." : "Copy failed");
+  };
+
+  const doShareWavelet = async () => {
+    setBusy("waveletShare");
+    const ok = await shareWavelet(store.get());
+    setBusy(null);
+    if (!ok) flash("Sharing is not available on this device");
+  };
+
+  const doSaveWavelet = async () => {
+    setSaveOpen(false);
+    setBusy("waveletSave");
+    let name = saveName.trim();
+    if (!/\.txt$/i.test(name)) name += ".txt";
+    const result = await saveTextToPickedLocation(name, "text/plain", wavelet);
+    setBusy(null);
+    if (!result) {
+      flash("Save cancelled or unavailable");
+    } else if ("shared" in result) {
+      flash("Share sheet opened — choose “Save to Files” or a destination");
+    } else {
+      void hapticSelect();
+      flash("Saved to the chosen folder");
+    }
   };
 
   const doSaveSession = async () => {
@@ -193,6 +233,65 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
           </Button>
         </View>
 
+        {/* Wavelet preview */}
+        <Card mode="contained" style={[styles.card, { backgroundColor: pal.surfaceContainer, marginTop: -4 }]}>
+          <Card.Content>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <Text variant="titleSmall" style={{ color: theme.colors.onSurface }}>
+                Wavelet GraphicEQ
+              </Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                Wavelet app · manual import
+              </Text>
+            </View>
+            <View style={[styles.peqBox, styles.waveletBox, { backgroundColor: pal.surfaceContainerLowest }]}>
+              <ScrollView nestedScrollEnabled style={{ flex: 1 }}>
+                <Text style={[styles.mono, { color: theme.colors.onSurface }]} selectable>
+                  {wavelet}
+                </Text>
+              </ScrollView>
+            </View>
+          </Card.Content>
+        </Card>
+
+        {/* Wavelet actions */}
+        <View style={styles.actions}>
+          <Button
+            mode="contained"
+            style={{ flex: 1 }}
+            contentStyle={{ height: 52 }}
+            icon="equalizer"
+            onPress={() => void doCopyWavelet()}
+          >
+            Copy
+          </Button>
+          <Button
+            mode="contained-tonal"
+            style={{ flex: 1 }}
+            contentStyle={{ height: 52 }}
+            icon="share-variant"
+            loading={busy === "waveletShare"}
+            onPress={() => void doShareWavelet()}
+          >
+            Share .txt
+          </Button>
+        </View>
+        <View style={[styles.actions, { marginTop: 8, marginBottom: 0 }]}>
+          <Button
+            mode="outlined"
+            style={{ flex: 1 }}
+            contentStyle={{ height: 48 }}
+            icon="content-save-cog"
+            loading={busy === "waveletSave"}
+            onPress={() => {
+              setSaveName(WAVELET_FILENAME);
+              setSaveOpen(true);
+            }}
+          >
+            Save as…
+          </Button>
+        </View>
+
         {/* Guidance */}
         <Card mode="contained" style={[styles.card, { backgroundColor: pal.surfaceContainer, marginTop: 12 }]}>
           <Card.Content style={{ gap: 8 }}>
@@ -206,12 +305,38 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
               The lines above work in most PEQ systems: Wavelet (Manual import), Neutron, UAPP, Poweramp EQ, USB Audio Player PRO, Qudelix 5K/APP and Qudelix Bluetooth DACs, or any app with preamp + per-filter Peak/Low shelf/High shelf bands. Enter preamp first, then each filter in order.
             </Text>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              The GraphicEQ line is Wavelet’s own format (Presets → Manual import); the preamp is already folded into its gains.
+            </Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
               Session files carry your marks and bands between this app and the original eqbyear.com website.
             </Text>
           </Card.Content>
         </Card>
 
       </ScrollView>
+
+      <Portal>
+        <Dialog visible={saveOpen} onDismiss={() => setSaveOpen(false)}>
+          <Dialog.Title>Save GraphicEQ</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 10 }}>
+              Choose a name, then pick the folder to save it in.
+            </Text>
+            <TextInput
+              mode="outlined"
+              label="File name"
+              value={saveName}
+              onChangeText={setSaveName}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setSaveOpen(false)}>Cancel</Button>
+            <Button onPress={() => void doSaveWavelet()}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
 
       {note ? (
         <View style={[styles.note, { backgroundColor: theme.colors.inverseSurface }]}>
@@ -241,6 +366,9 @@ const styles = StyleSheet.create({
   peqBox: {
     borderRadius: 12,
     padding: 12,
+  },
+  waveletBox: {
+    height: 140,
   },
   mono: {
     fontFamily: "monospace",

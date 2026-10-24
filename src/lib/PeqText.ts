@@ -4,8 +4,10 @@
 // files so sessions move freely between the phone and a desktop browser.
 
 import type { AppState, Band } from "./store.ts";
+import { FMAX, FMIN, responseDb } from "./dsp.ts";
 
 export const PEQ_FILENAME = "sweep-eq-peq.txt";
+export const WAVELET_FILENAME = "sweep-eq-graphiceq.txt";
 export const SESSION_FILENAME = "sweep-eq-session.json";
 
 // Generic parametric EQ text. Enabled bands only, sorted by fc, numbered from 1.
@@ -21,6 +23,23 @@ export function toPeqText(state: AppState): string {
     );
   });
   return lines.join("\n");
+}
+
+// Wavelet GraphicEQ text: log-spaced frequency/gain pairs, one decimal on dB,
+// joined with "; ". The auto preamp is baked into every gain so Wavelet's
+// own curve (no extra preamp control) reproduces the full response.
+export function toWaveletText(state: AppState, points = 128): string {
+  const bands: Band[] = Array.isArray(state?.bands) ? state.bands : [];
+  const preamp = Number(state?.preampDb) || 0;
+  const parts: string[] = [];
+  let prevFreq = -1;
+  for (let i = 0; i < points; i++) {
+    const f = Math.round(FMIN * Math.pow(FMAX / FMIN, i / (points - 1)));
+    if (f === prevFreq) continue; // log spacing rounds to duplicate Hz
+    prevFreq = f;
+    parts.push(`${f} ${(responseDb(bands, f) + preamp).toFixed(1)}`);
+  }
+  return `GraphicEQ: ${parts.join("; ")}`;
 }
 
 // Everything except the transient playing flag. Same shape the site stores.

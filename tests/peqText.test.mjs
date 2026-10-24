@@ -2,7 +2,7 @@
 // Format parity with the original site is a hard requirement.
 
 import assert from "node:assert/strict";
-import { toPeqText, sessionToJson, sessionFromJson } from "../src/lib/PeqText.ts";
+import { toPeqText, toWaveletText, sessionToJson, sessionFromJson } from "../src/lib/PeqText.ts";
 import { defaultState } from "../src/lib/store.ts";
 
 {
@@ -26,6 +26,35 @@ import { defaultState } from "../src/lib/store.ts";
     "Filter 2: ON PK Fc 3100 Hz Gain -3.0 dB Q 2.50",
   ].join("\n");
   assert.equal(toPeqText(s), want);
+}
+
+{
+  // Wavelet GraphicEQ: starts at 20 Hz, ends at 20 kHz, one decimal, "f g; " pairs,
+  // preamp baked into every gain, disabled bands excluded
+  const s = defaultState();
+  s.preampDb = -2;
+  s.bands = [{ id: "a", type: "PK", fc: 1000, gain: -6, q: 1, enabled: true }];
+  const w = toWaveletText(s);
+  assert.ok(w.startsWith("GraphicEQ: 20 "));
+  assert.ok(w.endsWith("20000 -2.0")); // 20 kHz back at flat response + preamp
+  const points = w.slice("GraphicEQ: ".length).split("; ");
+  assert.ok(Math.abs(points.length - 128) <= 2, "~128 points, got " + points.length);
+  // the point nearest 1000 Hz sits at the band's -6 gain plus -2 preamp
+  const pairs = points.map((p) => p.split(" ").map(Number));
+  const near = pairs.reduce((a, b) => (Math.abs(b[0] - 1000) < Math.abs(a[0] - 1000) ? b : a));
+  assert.ok(Math.abs(near[1] + 8) <= 0.35, `near 1 kHz: ${near} expect ~ -8.0`);
+}
+
+{
+  // flat EQ with no preamp is all zeros
+  const w = toWaveletText(defaultState());
+  const first = w.slice("GraphicEQ: ".length).split("; ")[0];
+  assert.equal(first, "20 0.0");
+
+  // disabled bands are ignored
+  const s = defaultState();
+  s.bands = [{ id: "a", type: "PK", fc: 1000, gain: -6, q: 1, enabled: false }];
+  assert.ok(!toWaveletText(s).includes("-6.0"));
 }
 
 {

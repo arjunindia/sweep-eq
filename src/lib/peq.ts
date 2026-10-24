@@ -4,20 +4,26 @@
 
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
+import { StorageAccessFramework } from "expo-file-system/legacy";
+import { Platform } from "react-native";
 import * as Sharing from "expo-sharing";
 import { store, type AppState } from "./store.ts";
 import {
   PEQ_FILENAME,
   SESSION_FILENAME,
+  WAVELET_FILENAME,
   sessionFromJson,
   sessionToJson,
   toPeqText,
+  toWaveletText,
 } from "./PeqText.ts";
 
 export {
   PEQ_FILENAME,
   SESSION_FILENAME,
+  WAVELET_FILENAME,
   toPeqText,
+  toWaveletText,
   sessionToJson,
   sessionFromJson,
 } from "./PeqText.ts";
@@ -55,11 +61,41 @@ export async function sharePeq(state: AppState): Promise<boolean> {
   return shareFile(PEQ_FILENAME, "text/plain", toPeqText(state));
 }
 
+export async function shareWavelet(state: AppState): Promise<boolean> {
+  return shareFile(WAVELET_FILENAME, "text/plain", toWaveletText(state));
+}
+
 export async function shareSession(state: AppState): Promise<boolean> {
   return shareFile(SESSION_FILENAME, "application/json", sessionToJson(state));
 }
 
-// Load a picked/edited session into the live store (used by ExportScreen and
+// Save text to a user-picked location with a chosen filename. Android uses
+// the Storage Access Framework (folder picker + nameable create); iOS has no
+// SAF, so it falls back to the share sheet where "Save to Files" is offered.
+// Returns the created URI, "shared", or null on failure/refusal.
+export type SaveResult = { uri: string } | { shared: true } | null;
+
+export async function saveTextToPickedLocation(
+  defaultName: string,
+  mime: string,
+  text: string
+): Promise<SaveResult> {
+  const cleanName = defaultName.trim().replace(/[\\/:*?"<>|]/g, "_") || defaultName;
+  if (Platform.OS !== "android") {
+    return (await shareFile(cleanName, mime, text)) ? { shared: true } : null;
+  }
+  try {
+    const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+    if (!perms.granted) return null;
+    const uri = await StorageAccessFramework.createFileAsync(perms.directoryUri, cleanName, mime);
+    await FileSystem.writeAsStringAsync(uri, text, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return { uri };
+  } catch {
+    return null;
+  }
+}
 // hand tests). Popup-free wrapper around store.load.
 export function applySession(jsonText: string): "ok" | "invalid" {
   try {
