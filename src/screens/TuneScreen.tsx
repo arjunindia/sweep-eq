@@ -421,8 +421,11 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
 
       <View style={{ height: 10 }} />
 
-      {/* Tone stage */}
-      <Surface mode="flat" style={[styles.card, { backgroundColor: pal.surfaceContainer }]}>
+      {/* Tone stage — the tape flexes to absorb every spare pixel of height. */}
+      <Surface
+        mode="flat"
+        style={[styles.card, styles.stageCard, { backgroundColor: pal.surfaceContainer }]}
+      >
         <FreqStage onEngage={startTone} />
 
         <View style={{ height: 10 }} />
@@ -433,8 +436,6 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
       </Surface>
 
       <MarksCard onFull={fullNotice} />
-
-      <View style={{ flex: 1 }} />
 
       {/* Snackbar zone (fixed height so the layout never jumps) */}
       {snack ? (
@@ -493,6 +494,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     borderRadius: 20,
     padding: 12,
+  },
+  stageCard: {
+    flex: 1,
   },
   readoutRow: {
     flexDirection: "row",

@@ -26,7 +26,7 @@ import {
 import { type Band, type Draft } from "../lib/store.ts";
 import { type Palette } from "../theme/theme.ts";
 
-const HEIGHT = 132;
+const MIN_HEIGHT = 110;
 const LABEL_H = 22;
 const BASE_INSET = 30;
 const MINOR_H = 10;
@@ -55,6 +55,7 @@ for (const f of MAJOR_TICKS) {
 
 interface StaticProps {
   width: number;
+  height: number;
   bands: Band[];
   selectedId: string | null;
   draft: Draft;
@@ -64,8 +65,8 @@ interface StaticProps {
 // Everything except the needle. Palette objects are stable per mode, and the
 // store updates bands/draft immutably, so this subtree stays put while the
 // user drags.
-const TapeStatic = memo(function TapeStatic({ width, bands, selectedId, draft, pal }: StaticProps) {
-  const base = HEIGHT - BASE_INSET;
+const TapeStatic = memo(function TapeStatic({ width, height, bands, selectedId, draft, pal }: StaticProps) {
+  const base = height - BASE_INSET;
   return (
     <G>
       {/* band locators */}
@@ -134,8 +135,18 @@ const TapeStatic = memo(function TapeStatic({ width, bands, selectedId, draft, p
   );
 });
 
-const Needle = memo(function Needle({ x, playing, pal }: { x: number; playing: boolean; pal: Palette }) {
-  const base = HEIGHT - BASE_INSET;
+const Needle = memo(function Needle({
+  x,
+  playing,
+  pal,
+  height,
+}: {
+  x: number;
+  playing: boolean;
+  pal: Palette;
+  height: number;
+}) {
+  const base = height - BASE_INSET;
   const cy = NEEDLE_TOP + 10;
   // The line starts at the dot's centre so the dot caps the needle cleanly
   // (no antenna poking out above the handle).
@@ -167,6 +178,7 @@ function SweepTapeInner({
   style,
 }: Props) {
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(MIN_HEIGHT);
   const bridge = useRef({ width: 0, onFreq, onEngage, onRelease });
   // Keep the broker fresh without touching refs during render.
   useEffect(() => {
@@ -189,7 +201,9 @@ function SweepTapeInner({
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const w = Math.max(0, Math.floor(e.nativeEvent.layout.width));
+    const h = Math.max(MIN_HEIGHT, Math.floor(e.nativeEvent.layout.height));
     setWidth(w);
+    setHeight(h);
   }, []);
 
   const measureWrap = useCallback(
@@ -328,7 +342,7 @@ function SweepTapeInner({
   const needleX = width > 0 ? freqToX(freq, width) : 0;
 
   return (
-    <View style={[style, { height: HEIGHT }]} onLayout={onLayout}>
+    <View style={[style, { flex: 1, minHeight: MIN_HEIGHT }]} onLayout={onLayout}>
       <View
         ref={measureWrap}
         style={{ flex: 1 }}
@@ -338,15 +352,16 @@ function SweepTapeInner({
         accessibilityRole="adjustable"
       >
         {width > 0 && (
-          <Svg width={width} height={HEIGHT} viewBox={`0 0 ${width} ${HEIGHT}`}>
+          <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
             <TapeStatic
               width={width}
+              height={height}
               bands={bands}
               selectedId={selectedId}
               draft={draft}
               pal={pal}
             />
-            <Needle x={needleX} playing={playing} pal={pal} />
+            <Needle x={needleX} playing={playing} pal={pal} height={height} />
           </Svg>
         )}
       </View>
