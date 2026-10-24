@@ -5,6 +5,7 @@
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
 import { StorageAccessFramework } from "expo-file-system/legacy";
+import { Directory as NewDirectory } from "expo-file-system";
 import { Platform } from "react-native";
 import * as Sharing from "expo-sharing";
 import { store, type AppState } from "./store.ts";
@@ -72,9 +73,10 @@ export async function shareSession(state: AppState): Promise<boolean> {
 // Save text to a user-picked location with a chosen filename. Android uses
 // the Storage Access Framework (folder picker + nameable create); iOS has no
 // SAF, so it falls back to the share sheet where "Save to Files" is offered.
-// Android 11+ cannot grant the Downloads root through the folder picker, so on
-// an IOException there we re-request permission pre-filled with the Download
-// root (the documented Expo pattern); outside Downloads the plain flow works.
+// File creation goes through the new `Directory.createFile()` API: the legacy
+// `createSAFFileAsync` first checks DocumentFile.canWrite(), which some
+// device providers report as false right after the grant and fails with
+// "Location ... isn't writable" (expo#41717); createFile() skips that check.
 // Returns the created URI, "shared", or null on refusal/cancellation.
 export type SaveResult = { uri: string } | { shared: true } | null;
 
@@ -83,7 +85,7 @@ export async function saveTextToPickedLocation(
   mime: string,
   text: string
 ): Promise<SaveResult> {
-  const cleanName = defaultName.trim().replace(/[\\/:*?"<>|]/g, "_") || defaultName;
+  const cleanName = defaultName.trim().replace(/[^\w.\- \u0080-\uFFFF]/g, "_") || defaultName;
   if (Platform.OS !== "android") {
     return (await shareFile(cleanName, mime, text)) ? { shared: true } : null;
   }
@@ -92,15 +94,6 @@ export async function saveTextToPickedLocation(
   try {
     return { uri: await createSafFile(perms.directoryUri, cleanName, mime, text) };
   } catch (err) {
-    // Downloads root (and a few other primaries) are not creatable even when
-    // picked — retry against the Download root with a fresh grant request.
-    if (perms.directoryUri.includes("com.android.externalstorage.documents")) {
-      const downloadUri = StorageAccessFramework.getUriForDirectoryInRoot("Download");
-      const dlPerms = await StorageAccessFramework.requestDirectoryPermissionsAsync(downloadUri);
-      if (dlPerms.granted) {
-        return { uri: await createSafFile(dlPerms.directoryUri, cleanName, mime, text) };
-      }
-    }
     throw new Error(String((err as Error)?.message ?? err));
   }
 }
@@ -111,11 +104,10 @@ async function createSafFile(
   mime: string,
   text: string
 ): Promise<string> {
-  const uri = await StorageAccessFramework.createFileAsync(dirUri, name, mime);
-  await FileSystem.writeAsStringAsync(uri, text, {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
-  return uri;
+  const dir = new NewDirectory(dirUri);
+  const file = dir.createFile(name, mime);
+  await file.write(text);
+  return file.uri;
 }
 // hand tests). Popup-free wrapper around store.load.
 export function applySession(jsonText: string): "ok" | "invalid" {
