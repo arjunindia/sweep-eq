@@ -116,9 +116,9 @@ jobs:
             echo "::error::No Xcode workspace found. Did pod install run?"
             exit 1
           fi
-          SCHEME="$(xcodebuild -list -workspace "$WORKSPACE" -json | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("workspace") or d.get("project"))["schemes"][0])')"
-          if [ -z "$SCHEME" ]; then
-            echo "::error::No Xcode scheme found."
+          SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+          if ! xcodebuild -list -workspace "$WORKSPACE" -json | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if sys.argv[1] in (d.get("workspace") or d.get("project"))["schemes"] else 1)' "$SCHEME"; then
+            echo "::error::Xcode scheme ${SCHEME} not found in ${WORKSPACE}."
             exit 1
           fi
           echo "Building scheme: $SCHEME"
