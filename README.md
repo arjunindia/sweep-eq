@@ -52,6 +52,8 @@ Navigation, SVG, WebView) is pure JS/native modules bundled with Expo Go.
 - **Export tab** — the classic PEQ text (`Preamp:` + `Filter n: ON PK Fc … Hz
   Gain … dB Q …`), byte-compatible with the website, so files load both ways.
   Sessions autosave to AsyncStorage (`sweep-eq:v1`) and can be shared as JSON.
+- **Settings tab** — choose the system/light/dark theme and, on Android 12+,
+  brand or wallpaper colors; open How it works and About.
 
 Up to 8 bands, exactly like the original; `Undo` revises marks, then removes
 the newest band once the draft is empty.
