@@ -89,7 +89,14 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
     setBusy("waveletSave");
     let name = saveName.trim();
     if (!/\.txt$/i.test(name)) name += ".txt";
-    const result = await saveTextToPickedLocation(name, "text/plain", wavelet);
+    let result: Awaited<ReturnType<typeof saveTextToPickedLocation>>;
+    try {
+      result = await saveTextToPickedLocation(name, "text/plain", wavelet);
+    } catch (err) {
+      setBusy(null);
+      flash(`Save failed: ${String((err as Error)?.message ?? err).slice(0, 140)}`);
+      return;
+    }
     setBusy(null);
     if (!result) {
       flash("Save cancelled or unavailable");
@@ -234,7 +241,7 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
         </View>
 
         {/* Wavelet preview */}
-        <Card mode="contained" style={[styles.card, { backgroundColor: pal.surfaceContainer, marginTop: -4 }]}>
+        <Card mode="contained" style={[styles.card, { backgroundColor: pal.surfaceContainer }]}>
           <Card.Content>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <Text variant="titleSmall" style={{ color: theme.colors.onSurface }}>

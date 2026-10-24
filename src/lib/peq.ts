@@ -92,8 +92,9 @@ export async function saveTextToPickedLocation(
       encoding: FileSystem.EncodingType.UTF8,
     });
     return { uri };
-  } catch {
-    return null;
+  } catch (err) {
+    // Surface the real reason — UnavailabilityError, SAF write failures, etc.
+    throw new Error(String((err as Error)?.message ?? err));
   }
 }
 // hand tests). Popup-free wrapper around store.load.
