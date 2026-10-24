@@ -72,7 +72,10 @@ export async function shareSession(state: AppState): Promise<boolean> {
 // Save text to a user-picked location with a chosen filename. Android uses
 // the Storage Access Framework (folder picker + nameable create); iOS has no
 // SAF, so it falls back to the share sheet where "Save to Files" is offered.
-// Returns the created URI, "shared", or null on failure/refusal.
+// Android 11+ cannot grant the Downloads root through the folder picker, so on
+// an IOException there we re-request permission pre-filled with the Download
+// root (the documented Expo pattern); outside Downloads the plain flow works.
+// Returns the created URI, "shared", or null on refusal/cancellation.
 export type SaveResult = { uri: string } | { shared: true } | null;
 
 export async function saveTextToPickedLocation(
@@ -84,18 +87,35 @@ export async function saveTextToPickedLocation(
   if (Platform.OS !== "android") {
     return (await shareFile(cleanName, mime, text)) ? { shared: true } : null;
   }
+  const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!perms.granted) return null;
   try {
-    const perms = await StorageAccessFramework.requestDirectoryPermissionsAsync();
-    if (!perms.granted) return null;
-    const uri = await StorageAccessFramework.createFileAsync(perms.directoryUri, cleanName, mime);
-    await FileSystem.writeAsStringAsync(uri, text, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
-    return { uri };
+    return { uri: await createSafFile(perms.directoryUri, cleanName, mime, text) };
   } catch (err) {
-    // Surface the real reason — UnavailabilityError, SAF write failures, etc.
+    // Downloads root (and a few other primaries) are not creatable even when
+    // picked — retry against the Download root with a fresh grant request.
+    if (perms.directoryUri.includes("com.android.externalstorage.documents")) {
+      const downloadUri = StorageAccessFramework.getUriForDirectoryInRoot("Download");
+      const dlPerms = await StorageAccessFramework.requestDirectoryPermissionsAsync(downloadUri);
+      if (dlPerms.granted) {
+        return { uri: await createSafFile(dlPerms.directoryUri, cleanName, mime, text) };
+      }
+    }
     throw new Error(String((err as Error)?.message ?? err));
   }
+}
+
+async function createSafFile(
+  dirUri: string,
+  name: string,
+  mime: string,
+  text: string
+): Promise<string> {
+  const uri = await StorageAccessFramework.createFileAsync(dirUri, name, mime);
+  await FileSystem.writeAsStringAsync(uri, text, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+  return uri;
 }
 // hand tests). Popup-free wrapper around store.load.
 export function applySession(jsonText: string): "ok" | "invalid" {

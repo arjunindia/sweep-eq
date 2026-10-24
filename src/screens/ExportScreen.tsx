@@ -327,7 +327,7 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
           <Dialog.Title>Save GraphicEQ</Dialog.Title>
           <Dialog.Content>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginBottom: 10 }}>
-              Choose a name, then pick the folder to save it in.
+              Choose a name, then pick the folder to save it in. If you pick the Downloads root, Android will ask a second time to grant access — confirm it.
             </Text>
             <TextInput
               mode="outlined"
