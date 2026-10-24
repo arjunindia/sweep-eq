@@ -18,6 +18,11 @@ jobs:
     name: Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      # x86/x86_64 are only useful for emulators. Real phones are covered by
+      # the two ARM ABIs; set the repo variable to arm64-v8a for the fastest
+      # (64-bit-only) build.
+      ANDROID_ARCHITECTURES: ${{ vars.ANDROID_ARCHITECTURES || 'arm64-v8a,armeabi-v7a' }}
 
     steps:
       - name: Check out
@@ -34,6 +39,16 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
 
       - name: Install dependencies
         run: npm ci
@@ -52,11 +67,20 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Configure Gradle
+        working-directory: android
+        run: |
+          set -euo pipefail
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g/' gradle.properties
+
       - name: Build release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew :app:assembleRelease \
+            --no-daemon \
+            --build-cache \
+            -PreactNativeArchitectures="$ANDROID_ARCHITECTURES"
 
       - name: Collect APK
         run: |
@@ -202,7 +226,7 @@ jobs:
           source = {
               "name": "Sweep EQ",
               "subtitle": "Headphone EQ by ear",
-              "description": "A sine-sweep headphone EQ with an 8-band parametric EQ and PEQ export.",
+              "description": "A sine-sweep headphone EQ with a configurable 8–16-band parametric EQ and PEQ export.",
               "iconURL": f"{base}/icon.png",
               "website": f"https://github.com/{repo}",
               "tintColor": tint,
@@ -216,7 +240,7 @@ jobs:
                       "subtitle": "Sine-sweep headphone EQ",
                       "localizedDescription": (
                           "Place three marks on a log-frequency tape, then sweep a sine tone "
-                          "and shape an 8-band parametric EQ by ear. Export the result as a "
+                          "and shape an 8–16-band parametric EQ by ear. Export the result as a "
                           "PEQ text file for your player."
                       ),
                       "iconURL": f"{base}/icon.png",

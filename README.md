@@ -115,8 +115,11 @@ Regenerate assets after touching the palette: `node scripts/gen-assets.mjs`.
 Pushing a `v*` tag runs `.github/workflows/release.yml`. It builds both
 artifacts on GitHub-hosted runners — no EAS, Expo token, or Apple account:
 
-- **Android** (`ubuntu-latest`): `expo prebuild` → `./gradlew assembleRelease`
-  → `SweepEQ.apk`.
+- **Android** (`ubuntu-latest`): `expo prebuild` → `./gradlew :app:assembleRelease`
+  → `SweepEQ.apk`. Gradle dependencies and build outputs are cached between
+  runs, and the APK targets `arm64-v8a` plus `armeabi-v7a` (no x86 emulator
+  ABIs). Set the `ANDROID_ARCHITECTURES` repository variable to `arm64-v8a`
+  for a faster, 64-bit-only build.
 - **iOS** (`macos-latest`): `expo prebuild` → `xcodebuild` with code signing
   disabled → `Payload/SweepEQ.app` zipped into an unsigned `SweepEQ.ipa`.
 
