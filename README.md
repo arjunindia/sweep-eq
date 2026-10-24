@@ -1,5 +1,15 @@
 # Sweep EQ — headphone EQ by ear
 
+<a href="https://altstore.io/source/github.com/arjunindia/sweep-eq/releases/latest/download/apps.json?app=com.sweepeq.app">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-dark.png">
+    <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-light.png" alt="Download on AltStore" width="245">
+  </picture>
+</a>
+<a href="https://github.com/arjunindia/sweep-eq/releases/latest/download/SweepEQ.apk">
+  <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/download-android-apk-badge-seeklogo.svg" alt="Download Android APK" width="245">
+</a>
+
 A mobile port of [DMS3tv's `eqbyear`](https://github.com/DMS3tv/eqbyear) ("EQ by ear"),
 rebuilt for Android with Expo and Material 3-style React Native UI. The same
 codebase also builds an unsigned iOS IPA for AltStore Classic. You listen to a
@@ -108,16 +118,6 @@ The release job attaches `SweepEQ.apk`, `SweepEQ.ipa`, `apps.json`, and
 `icon.png` to the [GitHub Release](https://github.com/arjunindia/sweep-eq/releases).
 
 ### Install via AltStore Classic
-
-<a href="https://altstore.io/source/github.com/arjunindia/sweep-eq/releases/latest/download/apps.json?app=com.sweepeq.app">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-dark.png">
-    <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-light.png" alt="Download on AltStore" width="245">
-  </picture>
-</a>
-<a href="https://github.com/arjunindia/sweep-eq/releases/latest/download/SweepEQ.apk">
-  <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/download-android-apk-badge-seeklogo.svg" alt="Download Android APK" width="245">
-</a>
 
 AltStore Classic re-signs the unsigned IPA with your Apple ID, so no paid
 developer account is required. Add this source URL in AltStore Classic:
