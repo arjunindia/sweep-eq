@@ -37,8 +37,10 @@ yarn-error.*
 *.tsbuildinfo
 
 # release workflow
-eas-builds.json
 artifacts/
+Payload/
+*.ipa
+*.apk
 
 # generated native folders
 /ios

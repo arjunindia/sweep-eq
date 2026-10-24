@@ -7,16 +7,17 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build APK + IPA and publish
+  android:
+    name: Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 90
 
     steps:
       - name: Check out
@@ -28,12 +29,18 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check release inputs
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check tag matches app version
         run: |
           set -euo pipefail
-
           tag_version="${GITHUB_REF_NAME#v}"
           app_version="$(node -p "require('./app.json').expo.version")"
           if [ "$tag_version" != "$app_version" ]; then
@@ -41,66 +48,208 @@ jobs:
             exit 1
           fi
 
-          project_id="$(node -p "require('./app.json').expo.extra?.eas?.projectId ?? ''")"
-          if [ -z "$project_id" ]; then
-            echo "::error::No EAS project linked. Run 'npx eas-cli@latest init' once, commit app.json, and push."
-            exit 1
-          fi
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --clean --no-install
 
-          if [ -z "${EXPO_TOKEN:-}" ]; then
-            echo "::error::Add an Expo access token as the EXPO_TOKEN repository secret."
-            exit 1
-          fi
+      - name: Build release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Collect APK
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk artifacts/SweepEQ.apk
+          ls -lh artifacts
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: artifacts/SweepEQ.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS unsigned IPA
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Set up Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Build APK and IPA on EAS
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      - name: Check tag matches app version
         run: |
           set -euo pipefail
-          eas build \
-            --platform all \
-            --profile production \
-            --non-interactive \
-            --wait \
-            --json > eas-builds.json
-          jq -e 'length == 2 and all(.[]; .status == "FINISHED")' eas-builds.json
-          jq -r '.[] | "\(.platform): \(.status) (\(.id))"' eas-builds.json
-
-      - name: Download artifacts
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-
-          apk_url="$(jq -r '.[] | select(.platform == "ANDROID") | .artifacts.applicationArchiveUrl // empty' eas-builds.json)"
-          ipa_url="$(jq -r '.[] | select(.platform == "IOS") | .artifacts.applicationArchiveUrl // empty' eas-builds.json)"
-
-          if [ -z "$apk_url" ] || [ -z "$ipa_url" ]; then
-            echo "::error::EAS did not return both an APK and an IPA."
-            jq '.' eas-builds.json
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version="$(node -p "require('./app.json').expo.version")"
+          if [ "$tag_version" != "$app_version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match expo.version ${app_version} in app.json. Bump the version and re-tag."
             exit 1
           fi
 
-          safe_tag="${GITHUB_REF_NAME//\//-}"
-          curl -fL --retry 3 --retry-delay 5 -o "artifacts/SweepEQ-${safe_tag}.apk" "$apk_url"
-          curl -fL --retry 3 --retry-delay 5 -o "artifacts/SweepEQ-${safe_tag}.ipa" "$ipa_url"
-          test -s "artifacts/SweepEQ-${safe_tag}.apk"
-          test -s "artifacts/SweepEQ-${safe_tag}.ipa"
-          file artifacts/*
+      - name: Generate iOS project
+        run: npx expo prebuild --platform ios --clean --no-install
 
-      - name: Publish GitHub Release
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install
+
+      - name: Build unsigned app
+        run: |
+          set -euo pipefail
+          WORKSPACE="$(ls -d ios/*.xcworkspace 2>/dev/null | head -n 1 || true)"
+          if [ -z "$WORKSPACE" ]; then
+            echo "::error::No Xcode workspace found. Did pod install run?"
+            exit 1
+          fi
+          SCHEME="$(xcodebuild -list -workspace "$WORKSPACE" -json | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("workspace") or d.get("project"))["schemes"][0])')"
+          if [ -z "$SCHEME" ]; then
+            echo "::error::No Xcode scheme found."
+            exit 1
+          fi
+          echo "Building scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            EXPANDED_CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="$(ls -d "$RUNNER_TEMP/DerivedData/Build/Products/Release-iphoneos"/*.app 2>/dev/null | head -n 1 || true)"
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::No .app bundle found."
+            exit 1
+          fi
+          echo "Packaging: $APP_PATH"
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry -X SweepEQ.ipa Payload
+          rm -rf Payload
+          ls -lh SweepEQ.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: SweepEQ.ipa
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate AltStore source
+        run: |
+          set -euo pipefail
+          cp assets/sweep-eq-icon.png artifacts/icon.png
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import plistlib
+          import zipfile
+
+          ipa_path = "artifacts/SweepEQ.ipa"
+          with zipfile.ZipFile(ipa_path) as ipa:
+              info_name = next(
+                  name for name in ipa.namelist()
+                  if name.startswith("Payload/") and name.endswith(".app/Info.plist")
+              )
+              info = plistlib.loads(ipa.read(info_name))
+
+          version = info["CFBundleShortVersionString"]
+          build_version = info["CFBundleVersion"]
+          min_os = info.get("MinimumOSVersion", "16.4")
+          size = os.path.getsize(ipa_path)
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          base = f"https://github.com/{repo}/releases/download/{tag}"
+          tint = "#0E6C6F"
+
+          source = {
+              "name": "Sweep EQ",
+              "subtitle": "Headphone EQ by ear",
+              "description": "A sine-sweep headphone EQ with an 8-band parametric EQ and PEQ export.",
+              "iconURL": f"{base}/icon.png",
+              "website": f"https://github.com/{repo}",
+              "tintColor": tint,
+              "nsfw": False,
+              "featuredApps": ["com.sweepeq.app"],
+              "apps": [
+                  {
+                      "name": "Sweep EQ",
+                      "bundleIdentifier": "com.sweepeq.app",
+                      "developerName": "Sweep EQ",
+                      "subtitle": "Sine-sweep headphone EQ",
+                      "localizedDescription": (
+                          "Place three marks on a log-frequency tape, then sweep a sine tone "
+                          "and shape an 8-band parametric EQ by ear. Export the result as a "
+                          "PEQ text file for your player."
+                      ),
+                      "iconURL": f"{base}/icon.png",
+                      "tintColor": tint,
+                      "category": "utilities",
+                      "versions": [
+                          {
+                              "version": version,
+                              "buildVersion": build_version,
+                              "date": datetime.date.today().isoformat(),
+                              "localizedDescription": f"Sweep EQ {version}",
+                              "downloadURL": f"{base}/SweepEQ.ipa",
+                              "size": size,
+                              "minOSVersion": min_os,
+                          }
+                      ],
+                      "appPermissions": {"entitlements": [], "privacy": {}},
+                  }
+              ],
+              "news": [],
+          }
+
+          with open("artifacts/apps.json", "w", encoding="utf-8") as f:
+              json.dump(source, f, indent=2, ensure_ascii=False)
+              f.write("\n")
+
+          print(json.dumps(source, indent=2))
+          PY
+
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          ls -lh artifacts
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
           else
@@ -109,3 +258,13 @@ jobs:
               --title "Sweep EQ $GITHUB_REF_NAME" \
               --generate-notes
           fi
+
+      - name: Add AltStore source to summary
+        run: |
+          {
+            echo "### AltStore Classic source"
+            echo
+            echo "https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/apps.json"
+            echo
+            echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/latest/download/SweepEQ.apk"
+          } >> "$GITHUB_STEP_SUMMARY"

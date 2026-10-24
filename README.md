@@ -1,7 +1,8 @@
-# Sweep EQ — headphone EQ by ear (Android)
+# Sweep EQ — headphone EQ by ear
 
 A mobile port of [DMS3tv's `eqbyear`](https://github.com/DMS3tv/eqbyear) ("EQ by ear"),
-rebuilt for Android with Expo and Material 3-style React Native UI. You listen to a
+rebuilt for Android with Expo and Material 3-style React Native UI. The same
+codebase also builds an unsigned iOS IPA for AltStore Classic. You listen to a
 sine sweep, place three marks on a log-frequency tape (where the problem starts,
 where it peaks, where it ends), and the app grows an 8-band parametric EQ that you
 can export as a PEQ text for your favourite player.
@@ -95,49 +96,60 @@ Regenerate assets after touching the palette: `node scripts/gen-assets.mjs`.
 
 ## Releases (tag → APK + IPA)
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`: it builds both
-platforms on EAS and attaches the APK and IPA to a GitHub Release.
+Pushing a `v*` tag runs `.github/workflows/release.yml`. It builds both
+artifacts on GitHub-hosted runners — no EAS, Expo token, or Apple account:
 
-One-time setup:
+- **Android** (`ubuntu-latest`): `expo prebuild` → `./gradlew assembleRelease`
+  → `SweepEQ.apk`.
+- **iOS** (`macos-latest`): `expo prebuild` → `xcodebuild` with code signing
+  disabled → `Payload/SweepEQ.app` zipped into an unsigned `SweepEQ.ipa`.
 
-1. Log in and link the project from this folder:
+The release job attaches `SweepEQ.apk`, `SweepEQ.ipa`, `apps.json`, and
+`icon.png` to the GitHub Release.
 
-   ```bash
-   npx eas-cli@latest login
-   npx eas-cli@latest init
-   ```
+### Install via AltStore Classic
 
-   Commit the `extra.eas.projectId` and `owner` fields that `init` writes into
-   `app.json`.
+AltStore Classic re-signs the unsigned IPA with your Apple ID, so no paid
+developer account is required. Add this source URL in AltStore Classic:
 
-2. Configure signing. Run one build for both platforms and follow the prompts:
+```
+https://github.com/<owner>/<repo>/releases/latest/download/apps.json
+```
 
-   ```bash
-   npx eas-cli@latest build -p all --profile production
-   ```
+The source URL always points at the newest release; the JSON inside points at
+that release's IPA and icon, so updates keep working across releases. A free
+Apple ID gives 7-day expiry and a 3-app limit; installing/refreshing needs
+AltServer on a Mac or Windows PC. The repo and releases must be public for
+AltStore to fetch them.
 
-   This creates the Android keystore and, after an Apple sign-in, the iOS
-   certificate and provisioning profile. A device-installable IPA needs an
-   Apple Developer Program membership. EAS stores both for CI.
+The APK is in the same release, or:
 
-3. Create an Expo access token (expo.dev → Account settings → Access tokens)
-   and add it to the GitHub repository as the `EXPO_TOKEN` secret.
+```
+https://github.com/<owner>/<repo>/releases/latest/download/SweepEQ.apk
+```
 
-4. Bump `expo.version` (and `android.versionCode` / `ios.buildNumber` if you
-   submit to stores), commit, then tag:
+### Versioning and signing
 
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
+Bump `expo.version` before tagging; the workflow refuses to build if the tag
+(without `v`) doesn't match. Also bump `android.versionCode` and
+`ios.buildNumber` so AltStore sees a new build. The app identity is
+`com.sweepeq.app` in `app.json`; change it before the first release if you
+need a different one.
 
-The workflow refuses to build if the tag (without `v`) does not match
-`expo.version`. It builds an APK (`buildType: apk` in `eas.json`) and an
-App Store IPA. An App Store IPA is for App Store Connect / TestFlight; for
-direct device installs, switch the iOS profile to internal distribution with
-an ad hoc provisioning profile. The app identity is `com.sweepeq.app` in
-`app.json`; change it before the first store upload if you need a different
-one.
+The APK is signed with Expo's generated debug keystore, which is fine for
+sideloading. For Play Store distribution, configure a release keystore.
+
+The IPA is unsigned and intended for AltStore/Sideloadly; it is not a
+TestFlight/App Store build. The generated iOS project targets iOS 16.4, so
+AltStore hides it on older devices. The iOS job uses a macOS runner, which
+consumes macOS Actions minutes (10× the Linux rate on private repositories).
+
+To release:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ## License
 
