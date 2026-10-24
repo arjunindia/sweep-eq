@@ -115,6 +115,9 @@ The release job attaches `SweepEQ.apk`, `SweepEQ.ipa`, `apps.json`, and
     <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-light.png" alt="Download on AltStore" width="245">
   </picture>
 </a>
+<a href="https://github.com/arjunindia/sweep-eq/releases/latest/download/SweepEQ.apk">
+  <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/download-android-apk-badge-seeklogo.svg" alt="Download Android APK" width="245">
+</a>
 
 AltStore Classic re-signs the unsigned IPA with your Apple ID, so no paid
 developer account is required. Add this source URL in AltStore Classic:
