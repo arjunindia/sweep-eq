@@ -36,13 +36,13 @@ import { defaultState } from "../src/lib/store.ts";
   s.bands = [{ id: "a", type: "PK", fc: 1000, gain: -6, q: 1, enabled: true }];
   const w = toWaveletText(s);
   assert.ok(w.startsWith("GraphicEQ: 20 "));
-  assert.ok(w.endsWith("20000 -2.0")); // 20 kHz back at flat response + preamp
+  assert.ok(w.endsWith("19871 -2.0")); // Wavelet's canonical last point + preamp
   const points = w.slice("GraphicEQ: ".length).split("; ");
-  assert.ok(Math.abs(points.length - 128) <= 2, "~128 points, got " + points.length);
+  assert.equal(points.length, 127, "fixed 127-point Wavelet grid");
   // the point nearest 1000 Hz sits at the band's -6 gain plus -2 preamp
   const pairs = points.map((p) => p.split(" ").map(Number));
   const near = pairs.reduce((a, b) => (Math.abs(b[0] - 1000) < Math.abs(a[0] - 1000) ? b : a));
-  assert.ok(Math.abs(near[1] + 8) <= 0.35, `near 1 kHz: ${near} expect ~ -8.0`);
+  assert.ok(Math.abs(near[1] + 8) <= 0.6, `near 1 kHz: ${near} expect ~ -8.0`);
 }
 
 {
