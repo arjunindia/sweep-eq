@@ -2,7 +2,7 @@
 // About / How-it-works dialogs and the destructive reset confirmation.
 
 import { useCallback, useState } from "react";
-import { Linking, View } from "react-native";
+import { Linking, Platform, View } from "react-native";
 import {
   Button,
   Dialog,
@@ -18,6 +18,7 @@ import {
 import { hapticSelect } from "../lib/haptic.ts";
 import { store } from "../lib/store.ts";
 import { useStoreSelector } from "../hooks/useStore.ts";
+import { dynamicColorSupported } from "../theme/theme.ts";
 
 const REPO_URL = "https://github.com/DMS3tv/eqbyear";
 const SITE_URL = "https://eqbyear.com";
@@ -31,6 +32,7 @@ type DialogKind = "none" | "about" | "help" | "reset";
 export function AppMenuDropdown({ onReset }: Props) {
   const theme = useTheme();
   const themePref = useStoreSelector((st) => st.themePref);
+  const colorSource = useStoreSelector((st) => st.colorSource);
   const bandCount = useStoreSelector((st) => st.bands.length);
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState<DialogKind>("none");
@@ -39,6 +41,15 @@ export function AppMenuDropdown({ onReset }: Props) {
     store.setThemePref(pref);
     hapticSelect();
   }, []);
+
+  const setColorSource = useCallback((source: "brand" | "dynamic") => {
+    store.setColorSource(source);
+    hapticSelect();
+  }, []);
+
+  // What the theme actually resolves to right now (dynamic needs Android 12+).
+  const effectiveSource =
+    colorSource === "dynamic" && dynamicColorSupported ? "dynamic" : "brand";
 
   return (
     <View>
@@ -81,6 +92,26 @@ export function AppMenuDropdown({ onReset }: Props) {
           onPress={() => setThemePref("dark")}
           title="Theme: dark"
         />
+        {Platform.OS === "android" && (
+          <>
+            <Divider style={{ marginVertical: 4 }} />
+            <Menu.Item
+              leadingIcon={effectiveSource === "dynamic" ? "check" : "palette-outline"}
+              onPress={() => setColorSource("dynamic")}
+              title={
+                dynamicColorSupported
+                  ? "Colors: wallpaper"
+                  : "Colors: wallpaper (needs Android 12+)"
+              }
+              disabled={!dynamicColorSupported}
+            />
+            <Menu.Item
+              leadingIcon={effectiveSource === "brand" ? "check" : "palette-outline"}
+              onPress={() => setColorSource("brand")}
+              title="Colors: brand teal"
+            />
+          </>
+        )}
         <Divider style={{ marginVertical: 4 }} />
         <Menu.Item
           leadingIcon="delete-sweep-outline"

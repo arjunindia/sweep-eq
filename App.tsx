@@ -8,14 +8,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
 import { NavigationContainer } from "@react-navigation/native";
 import * as SystemUI from "expo-system-ui";
-import { useAppStateAndTheme, navThemeFor } from "./src/theme/theme";
+import { useAppStateAndTheme } from "./src/theme/theme";
 import { AudioWebView, engine } from "./src/audio/engine";
 import { store, type AppState } from "./src/lib/store";
 import * as persist from "./src/lib/persist";
 import { RootTabs } from "./src/nav/RootTabs";
 
 export default function App() {
-  const { mode, paper } = useAppStateAndTheme();
+  const { mode, paper, nav } = useAppStateAndTheme();
 
   // Restore the autosaved session once (never throws), then autosave every
   // change (debounced inside the module). Subscribing only after the restore
@@ -100,7 +100,7 @@ export default function App() {
       {/* A hard flex:1 host around the navigator so the tab bar always docks
           to the window edge regardless of provider layout quirks. */}
       <View style={{ flex: 1 }}>
-        <NavigationContainer theme={navThemeFor(mode)}>
+        <NavigationContainer theme={nav}>
           <RootTabs />
         </NavigationContainer>
         {/* Hidden Web Audio bridge — one instance for the whole app life.

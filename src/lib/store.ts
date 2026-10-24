@@ -12,6 +12,7 @@ export const TYPES: BandType[] = ["PK", "LSC", "HSC"];
 export type BandType = "PK" | "LSC" | "HSC";
 export type DraftKind = "peak" | "dip";
 export type ThemePref = "system" | "light" | "dark";
+export type ColorSource = "brand" | "dynamic";
 
 const LEVEL_MIN = -60;
 const LEVEL_MAX = -6;
@@ -48,6 +49,7 @@ export interface AppState {
   selectedId: string | null;
   draft: Draft;
   themePref: ThemePref;
+  colorSource: ColorSource;
 }
 
 let seq = 0;
@@ -97,6 +99,7 @@ export function defaultState(): AppState {
     selectedId: null,
     draft: emptyDraft("peak"),
     themePref: "system",
+    colorSource: "dynamic",
   };
 }
 
@@ -163,6 +166,7 @@ export function validate(raw: unknown): AppState {
     selectedId,
     draft,
     themePref: s.themePref === "light" || s.themePref === "dark" ? s.themePref : "system",
+    colorSource: s.colorSource === "brand" ? "brand" : "dynamic",
   });
 }
 
@@ -185,6 +189,7 @@ export interface SweepStore {
   setPreamp(db: unknown): AppState;
   setPreampAuto(): AppState;
   setThemePref(t: ThemePref): AppState;
+  setColorSource(source: ColorSource): AppState;
   setDraftKind(kind: string): AppState;
   mark(which: string): AppState;
   commitDraft(): AppState;
@@ -284,6 +289,12 @@ export function createStore(initial: unknown): SweepStore {
       const v = t === "dark" || t === "light" ? t : "system";
       if (v === state.themePref) return state;
       return set({ ...state, themePref: v });
+    },
+
+    setColorSource(source) {
+      const v: ColorSource = source === "brand" ? "brand" : "dynamic";
+      if (v === state.colorSource) return state;
+      return set({ ...state, colorSource: v });
     },
 
     setDraftKind(kind) {

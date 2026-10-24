@@ -124,5 +124,18 @@ function fresh() {
   assert.equal(s.get().themePref, "system");
 }
 
+// color source defaults to Material You, can be pinned to brand, and survives
+// a save/restore round-trip (older saves without the field get the default).
+{
+  const s = fresh();
+  assert.equal(s.get().colorSource, "dynamic");
+  s.setColorSource("brand");
+  assert.equal(s.get().colorSource, "brand");
+  s.load({ colorSource: "brand" });
+  assert.equal(s.get().colorSource, "brand");
+  s.load({ colorSource: "weird" });
+  assert.equal(s.get().colorSource, "dynamic");
+}
+
 console.log("store.test.mjs — all passed");
 process.exit(0);

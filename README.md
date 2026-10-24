@@ -45,6 +45,10 @@ Navigation, SVG, WebView) is pure JS/native modules bundled with Expo Go.
 Up to 8 bands, exactly like the original; `Undo` revises marks, then removes
 the newest band once the draft is empty.
 
+Colors follow Material You on Android 12+ by default (wallpaper-derived via
+`@expo/ui`), with a brand teal/amber palette available from the ⋮ menu
+(**Colors**). Light/dark can follow the system or be pinned in the same menu.
+
 ## How it works
 
 ```
@@ -60,7 +64,7 @@ src/
                           VolumeGate (safety gate), AppMenu
   screens/                Tune, Curve, Export
   nav/RootTabs.tsx        bottom tab navigation
-  theme/theme.ts          Material 3 palette, teal primary + amber accent
+  theme/theme.ts          MD3 palettes: brand teal/amber or Material You (Android 12+)
 scripts/gen-assets.mjs    generates the icon set (pure Node, zlib PNG writer)
 tests/                    node:test-free assert suites for dsp/store/PEQ/engine
 ```
