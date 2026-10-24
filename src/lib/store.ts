@@ -6,9 +6,9 @@
 
 import * as dsp from "./dsp.ts";
 
-export const MAX_BANDS = 16;
+export const MAX_BANDS = 48;
 export const DEFAULT_BAND_LIMIT = 8;
-export const BAND_LIMIT_OPTIONS = [8, 12, 16] as const;
+export const BAND_LIMIT_OPTIONS = [8, 12, 16,48] as const;
 export type BandLimit = (typeof BAND_LIMIT_OPTIONS)[number];
 export const TYPES: BandType[] = ["PK", "LSC", "HSC"];
 
