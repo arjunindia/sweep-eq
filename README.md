@@ -140,11 +140,12 @@ https://github.com/arjunindia/sweep-eq/releases/latest/download/SweepEQ.apk
 
 ### Versioning and signing
 
-Bump `expo.version` before tagging; the workflow refuses to build if the tag
-(without `v`) doesn't match. Also bump `android.versionCode` and
-`ios.buildNumber` so AltStore sees a new build. The app identity is
-`com.sweepeq.app` in `app.json`; change it before the first release if you
-need a different one.
+Bump `expo.version` before tagging; the workflow refuses to build if the tag's
+base version (without `v` and any `-beta.1` suffix) doesn't match. A
+prerelease tag like `v0.1.0-beta.1` is fine as long as `expo.version` is
+`0.1.0`. Also bump `android.versionCode` and `ios.buildNumber` so AltStore
+sees a new build. The app identity is `com.sweepeq.app` in `app.json`; change
+it before the first release if you need a different one.
 
 The APK is signed with Expo's generated debug keystore, which is fine for
 sideloading. For Play Store distribution, configure a release keystore.
@@ -157,9 +158,13 @@ consumes macOS Actions minutes (10× the Linux rate on private repositories).
 To release:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.1.0-beta.1
+git push origin v0.1.0-beta.1
 ```
+
+The GitHub release is intentionally published as a normal release (not a
+GitHub prerelease) so `releases/latest/download/apps.json` resolves for
+AltStore.
 
 ## License
 
