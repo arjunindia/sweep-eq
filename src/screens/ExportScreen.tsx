@@ -25,7 +25,7 @@ import { readTextFile } from "../lib/files.ts";
 import { store } from "../lib/store.ts";
 import { hapticSelect } from "../lib/haptic.ts";
 import { useStoreSelector } from "../hooks/useStore.ts";
-import { AppMenuDropdown } from "../components/AppMenu.tsx";
+import { ClearBandsButton } from "../components/ClearBandsButton.tsx";
 import type { TabScreenProps } from "../nav/types.ts";
 
 export function ExportScreen(_props: TabScreenProps<"Export">) {
@@ -109,11 +109,7 @@ export function ExportScreen(_props: TabScreenProps<"Export">) {
           Export
         </Text>
         <View style={{ flex: 1 }} />
-        <AppMenuDropdown
-          onReset={() => {
-            store.removeAllBands();
-          }}
-        />
+        <ClearBandsButton />
       </View>
 
       <ScrollView

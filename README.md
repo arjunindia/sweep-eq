@@ -57,8 +57,10 @@ Up to 8 bands, exactly like the original; `Undo` revises marks, then removes
 the newest band once the draft is empty.
 
 Colors follow Material You on Android 12+ by default (wallpaper-derived via
-`@expo/ui`), with a brand teal/amber palette available from the ⋮ menu
-(**Colors**). Light/dark can follow the system or be pinned in the same menu.
+`@expo/ui`), with a brand teal/amber palette available in the **Settings** tab
+(**Colors**). Light/dark can follow the system or be pinned there too. The
+**Settings** tab also holds How it works and About; the destructive clear-all
+action stays a standalone button in the Tune, Curve, and Export app bars.
 
 ## How it works
 
@@ -72,8 +74,8 @@ src/
   lib/peq.ts              clipboard / share-sheet helpers for PEQ + sessions
   lib/files.ts            file pick/share plumbing
   components/             SweepTape, ResponseGraph, HoldButton, BandEditorModal,
-                          VolumeGate (safety gate), AppMenu
-  screens/                Tune, Curve, Export
+                          VolumeGate (safety gate), ClearBandsButton
+  screens/                Tune, Curve, Export, Settings
   nav/RootTabs.tsx        bottom tab navigation
   theme/theme.ts          MD3 palettes: brand teal/amber or Material You (Android 12+)
 scripts/gen-assets.mjs    generates the icon set (pure Node, zlib PNG writer)

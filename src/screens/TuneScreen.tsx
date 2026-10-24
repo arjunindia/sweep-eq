@@ -30,7 +30,7 @@ import { usePalette } from "../theme/theme.ts";
 import { engine } from "../audio/engine.tsx";
 import { SweepTape } from "../components/SweepTape.tsx";
 import { HoldButton } from "../components/HoldButton.tsx";
-import { AppMenuDropdown } from "../components/AppMenu.tsx";
+import { ClearBandsButton } from "../components/ClearBandsButton.tsx";
 import { VolumeGate } from "../components/VolumeGate.tsx";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../nav/types.ts";
@@ -416,7 +416,7 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
         >
           {bandCountLabel}
         </Chip>
-        <AppMenuDropdown onReset={() => store.removeAllBands()} />
+        <ClearBandsButton />
       </View>
 
       <View style={{ height: 10 }} />

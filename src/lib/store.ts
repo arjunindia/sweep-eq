@@ -1,8 +1,8 @@
 // Store: state, actions, subscribe — a TypeScript port of the original
 // `js/store.js` (Apache-2.0, (c) DMS / eqbyear.com). Every change produces a
 // new state object. Mobile adaptations: `theme` becomes `themePref`
-// ("system" follows the OS) and a `removeAllBands()` action exists for the
-// destructive-reset menu item.
+// ("system" follows the OS) and a `removeAllBands()` action backs the
+// standalone clear-all button in the app bars.
 
 import * as dsp from "./dsp.ts";
 

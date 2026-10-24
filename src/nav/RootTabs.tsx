@@ -1,5 +1,6 @@
-// Bottom navigation — three destinations matching the natural flow:
-// sweep+mark audio ("Tune"), inspect bands ("Curve"), take it away ("Export").
+// Bottom navigation — four destinations matching the natural flow:
+// sweep+mark audio ("Tune"), inspect bands ("Curve"), take it away ("Export"),
+// and app-level preferences ("Settings").
 
 import { StyleSheet } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -7,6 +8,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { TuneScreen } from "../screens/TuneScreen.tsx";
 import { CurveScreen } from "../screens/CurveScreen.tsx";
 import { ExportScreen } from "../screens/ExportScreen.tsx";
+import { SettingsScreen } from "../screens/SettingsScreen.tsx";
 import { usePalette } from "../theme/theme.ts";
 import type { RootTabParamList } from "./types.ts";
 
@@ -16,6 +18,7 @@ const ICONS = {
   Tune: "equalizer",
   Curve: "chart-line",
   Export: "share-variant",
+  Settings: "cog-outline",
 } as const;
 
 export function RootTabs() {
@@ -53,6 +56,7 @@ export function RootTabs() {
       <Tab.Screen name="Tune" component={TuneScreen} options={{ title: "Tune" }} />
       <Tab.Screen name="Curve" component={CurveScreen} options={{ title: "Curve" }} />
       <Tab.Screen name="Export" component={ExportScreen} options={{ title: "Export" }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
     </Tab.Navigator>
   );
 }

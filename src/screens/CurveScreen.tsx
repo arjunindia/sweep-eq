@@ -24,7 +24,7 @@ import { useStoreSelector } from "../hooks/useStore.ts";
 import { usePalette } from "../theme/theme.ts";
 import { ResponseGraph } from "../components/ResponseGraph.tsx";
 import { BandEditorModal } from "../components/BandEditorModal.tsx";
-import { AppMenuDropdown } from "../components/AppMenu.tsx";
+import { ClearBandsButton } from "../components/ClearBandsButton.tsx";
 import type { TabScreenProps } from "../nav/types.ts";
 
 const TYPE_LABEL: Record<Band["type"], string> = {
@@ -89,11 +89,6 @@ function CurveScreenInner({ navigation }: TabScreenProps<"Curve">) {
   const editingIndex = bands.findIndex((b) => b.id === editingId);
   const full = bands.length >= 8;
 
-  const onReset = () => {
-    setEditingId(null);
-    store.removeAllBands();
-  };
-
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
@@ -101,7 +96,7 @@ function CurveScreenInner({ navigation }: TabScreenProps<"Curve">) {
           Curve
         </Text>
         <View style={{ flex: 1 }} />
-        <AppMenuDropdown onReset={onReset} />
+        <ClearBandsButton onCleared={() => setEditingId(null)} />
       </View>
 
       <ScrollView

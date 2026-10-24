@@ -4,6 +4,7 @@ export type RootTabParamList = {
   Tune: undefined;
   Curve: undefined;
   Export: undefined;
+  Settings: undefined;
 };
 
 export type TabNav<Name extends keyof RootTabParamList = keyof RootTabParamList> =
