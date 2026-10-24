@@ -105,7 +105,7 @@ artifacts on GitHub-hosted runners — no EAS, Expo token, or Apple account:
   disabled → `Payload/SweepEQ.app` zipped into an unsigned `SweepEQ.ipa`.
 
 The release job attaches `SweepEQ.apk`, `SweepEQ.ipa`, `apps.json`, and
-`icon.png` to the GitHub Release.
+`icon.png` to the [GitHub Release](https://github.com/arjunindia/sweep-eq/releases).
 
 ### Install via AltStore Classic
 
@@ -113,7 +113,7 @@ AltStore Classic re-signs the unsigned IPA with your Apple ID, so no paid
 developer account is required. Add this source URL in AltStore Classic:
 
 ```
-https://github.com/<owner>/<repo>/releases/latest/download/apps.json
+https://github.com/arjunindia/sweep-eq/releases/latest/download/apps.json
 ```
 
 The source URL always points at the newest release; the JSON inside points at
@@ -125,7 +125,7 @@ AltStore to fetch them.
 The APK is in the same release, or:
 
 ```
-https://github.com/<owner>/<repo>/releases/latest/download/SweepEQ.apk
+https://github.com/arjunindia/sweep-eq/releases/latest/download/SweepEQ.apk
 ```
 
 ### Versioning and signing
