@@ -7,9 +7,13 @@
     "icon": "./assets/sweep-eq-icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sweepeq.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.sweepeq.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0E1415",
         "foregroundImage": "./assets/sweep-eq-android-foreground.png",

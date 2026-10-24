@@ -36,6 +36,10 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# release workflow
+eas-builds.json
+artifacts/
+
 # generated native folders
 /ios
 /android

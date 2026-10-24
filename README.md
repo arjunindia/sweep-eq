@@ -93,6 +93,52 @@ npx expo start      # dev server
 
 Regenerate assets after touching the palette: `node scripts/gen-assets.mjs`.
 
+## Releases (tag → APK + IPA)
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: it builds both
+platforms on EAS and attaches the APK and IPA to a GitHub Release.
+
+One-time setup:
+
+1. Log in and link the project from this folder:
+
+   ```bash
+   npx eas-cli@latest login
+   npx eas-cli@latest init
+   ```
+
+   Commit the `extra.eas.projectId` and `owner` fields that `init` writes into
+   `app.json`.
+
+2. Configure signing. Run one build for both platforms and follow the prompts:
+
+   ```bash
+   npx eas-cli@latest build -p all --profile production
+   ```
+
+   This creates the Android keystore and, after an Apple sign-in, the iOS
+   certificate and provisioning profile. A device-installable IPA needs an
+   Apple Developer Program membership. EAS stores both for CI.
+
+3. Create an Expo access token (expo.dev → Account settings → Access tokens)
+   and add it to the GitHub repository as the `EXPO_TOKEN` secret.
+
+4. Bump `expo.version` (and `android.versionCode` / `ios.buildNumber` if you
+   submit to stores), commit, then tag:
+
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+The workflow refuses to build if the tag (without `v`) does not match
+`expo.version`. It builds an APK (`buildType: apk` in `eas.json`) and an
+App Store IPA. An App Store IPA is for App Store Connect / TestFlight; for
+direct device installs, switch the iOS profile to internal distribution with
+an ad hoc provisioning profile. The app identity is `com.sweepeq.app` in
+`app.json`; change it before the first store upload if you need a different
+one.
+
 ## License
 
 Ported and adapted code: Apache-2.0, matching the original

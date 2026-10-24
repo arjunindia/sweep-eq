@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build APK + IPA and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check release inputs
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          tag_version="${GITHUB_REF_NAME#v}"
+          app_version="$(node -p "require('./app.json').expo.version")"
+          if [ "$tag_version" != "$app_version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match expo.version ${app_version} in app.json. Bump the version and re-tag."
+            exit 1
+          fi
+
+          project_id="$(node -p "require('./app.json').expo.extra?.eas?.projectId ?? ''")"
+          if [ -z "$project_id" ]; then
+            echo "::error::No EAS project linked. Run 'npx eas-cli@latest init' once, commit app.json, and push."
+            exit 1
+          fi
+
+          if [ -z "${EXPO_TOKEN:-}" ]; then
+            echo "::error::Add an Expo access token as the EXPO_TOKEN repository secret."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build APK and IPA on EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          eas build \
+            --platform all \
+            --profile production \
+            --non-interactive \
+            --wait \
+            --json > eas-builds.json
+          jq -e 'length == 2 and all(.[]; .status == "FINISHED")' eas-builds.json
+          jq -r '.[] | "\(.platform): \(.status) (\(.id))"' eas-builds.json
+
+      - name: Download artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+
+          apk_url="$(jq -r '.[] | select(.platform == "ANDROID") | .artifacts.applicationArchiveUrl // empty' eas-builds.json)"
+          ipa_url="$(jq -r '.[] | select(.platform == "IOS") | .artifacts.applicationArchiveUrl // empty' eas-builds.json)"
+
+          if [ -z "$apk_url" ] || [ -z "$ipa_url" ]; then
+            echo "::error::EAS did not return both an APK and an IPA."
+            jq '.' eas-builds.json
+            exit 1
+          fi
+
+          safe_tag="${GITHUB_REF_NAME//\//-}"
+          curl -fL --retry 3 --retry-delay 5 -o "artifacts/SweepEQ-${safe_tag}.apk" "$apk_url"
+          curl -fL --retry 3 --retry-delay 5 -o "artifacts/SweepEQ-${safe_tag}.ipa" "$ipa_url"
+          test -s "artifacts/SweepEQ-${safe_tag}.apk"
+          test -s "artifacts/SweepEQ-${safe_tag}.ipa"
+          file artifacts/*
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" artifacts/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" artifacts/* \
+              --verify-tag \
+              --title "Sweep EQ $GITHUB_REF_NAME" \
+              --generate-notes
+          fi
