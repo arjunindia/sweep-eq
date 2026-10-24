@@ -3,6 +3,7 @@ import type { BottomTabScreenProps, BottomTabNavigationProp } from "@react-navig
 export type RootTabParamList = {
   Tune: undefined;
   Curve: undefined;
+  Preview: undefined;
   Export: undefined;
   Settings: undefined;
 };

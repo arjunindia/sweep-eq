@@ -50,6 +50,11 @@ Navigation, SVG, WebView) is pure JS/native modules bundled with Expo Go.
 - **Curve tab** — see the summed magnitude response; tap a band to edit its
   centre, gain (±24 dB), Q (0.1–20), or delete it; preamp is auto-set to
   −max(positive gain) (or you can override it).
+- **Preview tab** — search Apple Music’s iTunes catalog for a song, play its
+  30-second preview through the same EQ graph, and tap **Bypass** / **EQ on**
+  while it plays to A/B the curve. Artwork and preview clips come from Apple;
+  a network connection is required. Starting the sweep tone pauses a preview
+  (and vice versa) so the two never play over each other.
 - **Export tab** — the classic PEQ text (`Preamp:` + `Filter n: ON PK Fc … Hz
   Gain … dB Q …`), byte-compatible with the website, so files load both ways.
   Sessions autosave to AsyncStorage (`sweep-eq:v1`) and can be shared as JSON.
@@ -77,22 +82,29 @@ src/
   lib/PeqText.ts          PEQ text + session JSON serialisation (parity layer)
   lib/peq.ts              clipboard / share-sheet helpers for PEQ + sessions
   lib/files.ts            file pick/share plumbing
+  lib/itunes.ts           iTunes Search API client + defensive preview parser
   components/             SweepTape, ResponseGraph, HoldButton, BandEditorModal,
                           VolumeGate (safety gate), ClearBandsButton
-  screens/                Tune, Curve, Export, Settings
+  screens/                Tune, Curve, Preview, Export, Settings
   nav/RootTabs.tsx        bottom tab navigation
   theme/theme.ts          MD3 palettes: brand teal/amber or Material You (Android 12+)
 scripts/gen-assets.mjs    generates the icon set (pure Node, zlib PNG writer)
-tests/                    node:test-free assert suites for dsp/store/PEQ/engine
+tests/                    node:test-free assert suites for dsp/store/PEQ/engine/iTunes
 ```
 
 Audio lives in a one-pixel hidden `WebView` running a template page with the
 **exact** graph of the original engine: osc → tone gain (15 ms fades; 8 ms
-frequency glide) → preamp → 16 fixed biquads (unused slots stay flat) → level
-gain → ×0.5 ceiling → waveshaper clipper → destination. Commands
-(`start/play/stop/freq/level/eq`) are coalesced to the newest value every
-40 ms. The tone always stops when the app leaves the foreground, and the gate
-dialog must be accepted once per session before any audio starts.
+frequency glide) → preamp → 16 fixed biquads (unused slots stay flat) → bqOut
+→ level gain → ×0.5 ceiling → waveshaper clipper → destination. The Preview tab adds
+one hidden `<audio>` element; its media source enters the same preamp/biquads
+and returns to the ceiling through a separate post-EQ gain (so the sweep’s
+level control never attenuates songs). Apple’s preview CDN sends
+`Access-Control-Allow-Origin: *`, which lets the Web Audio graph process the
+stream. Commands (`start/play/stop/freq/level/eq`, plus
+`previewLoad/previewPlay/previewPause/previewStop/previewSeek`) are coalesced
+to the newest value every 40 ms. The tone stops and a preview pauses when the
+app leaves the foreground, and the gate dialog must be accepted once per
+session before any audio starts.
 
 *Escalation path:* for a native build later, swap the WebView bridge for
 `react-native-audio-api` (same graph, same node names) — the engine API
@@ -102,7 +114,7 @@ that the UI never learns about the transport underneath.
 ## Development
 
 ```bash
-npm run test        # dsp / store / PEQ text / engine protocol suites
+npm run test        # dsp / store / PEQ text / engine protocol / iTunes suites
 npm run typecheck   # tsc --noEmit
 npm run lint        # eslint (expo config)
 npx expo start      # dev server

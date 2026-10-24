@@ -38,7 +38,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/dsp.test.mjs && node tests/store.test.mjs && node tests/peqText.test.mjs && node tests/engine.test.mjs"
+    "test": "node tests/dsp.test.mjs && node tests/store.test.mjs && node tests/peqText.test.mjs && node tests/engine.test.mjs && node tests/itunes.test.mjs"
   },
   "private": true
 }

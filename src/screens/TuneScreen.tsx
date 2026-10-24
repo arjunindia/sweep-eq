@@ -368,6 +368,7 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
       return;
     }
     if (!store.get().playing) {
+      engine.pausePreview();
       engine.play();
       store.setPlaying(true);
     }
@@ -382,6 +383,7 @@ function TuneScreenInner({ navigation }: BottomTabScreenProps<RootTabParamList, 
       engine.stop();
       store.setPlaying(false);
     } else {
+      engine.pausePreview();
       engine.play();
       store.setPlaying(true);
     }

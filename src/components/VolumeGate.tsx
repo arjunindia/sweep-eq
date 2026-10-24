@@ -23,9 +23,24 @@ interface Props {
   onClose: () => void;
   onStart: () => void;
   busy?: boolean;
+  title?: string;
+  body?: string;
+  startLabel?: string;
+  showLevel?: boolean;
 }
 
-export function VolumeGate({ visible, levelDb, onLevel, onClose, onStart, busy }: Props) {
+export function VolumeGate({
+  visible,
+  levelDb,
+  onLevel,
+  onClose,
+  onStart,
+  busy,
+  title = "Turn your volume down first",
+  body = "Sine tones at high level can damage hearing and equipment. Start quiet, then raise the level to where you normally listen to music.",
+  startLabel = "I understand, start",
+  showLevel = true,
+}: Props) {
   const theme = useTheme();
   const pal = usePalette();
 
@@ -35,7 +50,9 @@ export function VolumeGate({ visible, levelDb, onLevel, onClose, onStart, busy }
       transparent
       animationType="fade"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={() => {
+        if (!busy) onClose();
+      }}
       accessible
     >
       <View style={[styles.scrim, { backgroundColor: theme.colors.scrim + "B3" }]}>
@@ -53,39 +70,43 @@ export function VolumeGate({ visible, levelDb, onLevel, onClose, onStart, busy }
             <Icon size={26} source="alert" color={theme.colors.onTertiaryContainer} />
           </View>
           <Text variant="headlineSmall" style={{ color: theme.colors.onSurface, textAlign: "center" }}>
-            Turn your volume down first
+            {title}
           </Text>
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: "center", marginTop: 8 }}>
-            Sine tones at high level can damage hearing and equipment. Start quiet, then raise the level to where you normally listen to music.
+            {body}
           </Text>
 
-          <View style={styles.levelRow}>
-            <IconButton icon="volume-low" size={20} disabled />
-            <Slider
-              style={{ flex: 1 }}
-              minimumValue={-60}
-              maximumValue={-6}
-              step={1}
-              value={levelDb}
-              onValueChange={(v) => onLevel(Math.round(v))}
-              minimumTrackTintColor={theme.colors.primary}
-              maximumTrackTintColor={theme.colors.surfaceVariant}
-              thumbTintColor={theme.colors.primary}
-              accessibilityLabel="Level in decibels"
-            />
-            <IconButton icon="volume-high" size={20} disabled />
-          </View>
-          <Text
-            variant="titleMedium"
-            style={{
-              color: theme.colors.tertiary,
-              fontVariant: ["tabular-nums"],
-              alignSelf: "center",
-              marginBottom: 14,
-            }}
-          >
-            {fmtDb(levelDb)}
-          </Text>
+          {showLevel ? (
+            <>
+              <View style={styles.levelRow}>
+                <IconButton icon="volume-low" size={20} disabled />
+                <Slider
+                  style={{ flex: 1 }}
+                  minimumValue={-60}
+                  maximumValue={-6}
+                  step={1}
+                  value={levelDb}
+                  onValueChange={(v) => onLevel(Math.round(v))}
+                  minimumTrackTintColor={theme.colors.primary}
+                  maximumTrackTintColor={theme.colors.surfaceVariant}
+                  thumbTintColor={theme.colors.primary}
+                  accessibilityLabel="Level in decibels"
+                />
+                <IconButton icon="volume-high" size={20} disabled />
+              </View>
+              <Text
+                variant="titleMedium"
+                style={{
+                  color: theme.colors.tertiary,
+                  fontVariant: ["tabular-nums"],
+                  alignSelf: "center",
+                  marginBottom: 14,
+                }}
+              >
+                {fmtDb(levelDb)}
+              </Text>
+            </>
+          ) : null}
 
           <Button
             mode="contained"
@@ -94,10 +115,15 @@ export function VolumeGate({ visible, levelDb, onLevel, onClose, onStart, busy }
             onPress={onStart}
             contentStyle={{ height: 48 }}
           >
-            I understand, start
+            {startLabel}
           </Button>
 
-          <Button mode="text" onPress={onClose} textColor={theme.colors.onSurfaceVariant}>
+          <Button
+            mode="text"
+            onPress={onClose}
+            disabled={busy}
+            textColor={theme.colors.onSurfaceVariant}
+          >
             Not now
           </Button>
         </Surface>

@@ -26,6 +26,7 @@ export const ENGINE_JS = `
   var SNAP = 0.005;      // settle time constant when a drag ends (s)
   var SMOOTH = 0.01;     // level / filter parameter smoothing (s)
   var CEILING = 0.5;     // fixed -6 dBFS output ceiling
+  var PREVIEW_LEVEL = 0.6; // fixed song-preview output level (pre-ceiling)
 
   var TYPE_MAP = { PK: 'peaking', LSC: 'lowshelf', HSC: 'highshelf' };
   var dbToGain = function (db) { return Math.pow(10, db / 20); };
@@ -33,7 +34,11 @@ export const ENGINE_JS = `
   var ctx = null;
   var osc = null, toneGain = null, preampGain = null, levelGain = null;
   var ceiling = null, clipper = null;
+  var bqOut = null, previewGain = null;
   var biquads = [];
+  var previewEl = null, previewSource = null;
+  var previewWantedPlay = false;
+  var previewLoading = false;
 
   var freq = 1000;
   var levelDb = -18;
@@ -78,8 +83,20 @@ export const ENGINE_JS = `
         biquads.push(bq);
       }
 
+      bqOut = ctx.createGain();
+      bqOut.gain.setValueAtTime(1, now);
+
       levelGain = ctx.createGain();
       levelGain.gain.setValueAtTime(dbToGain(levelDb), now);
+
+      // The song preview joins the same preamp/biquad chain, then returns to
+      // the ceiling through its own gain. It must not pass through levelGain:
+      // that is the sweep's -60..-6 dB tone control, not a media volume.
+      // The preview branch is muted until a song is actually playing. If it
+      // stayed at unity, the sweep would also travel bqOut → previewGain and
+      // bypass levelGain, making the tone far louder (and clipping).
+      previewGain = ctx.createGain();
+      previewGain.gain.setValueAtTime(0, now);
 
       ceiling = ctx.createGain();
       ceiling.gain.setValueAtTime(CEILING, now);
@@ -104,17 +121,244 @@ export const ENGINE_JS = `
         node.connect(biquads[j]);
         node = biquads[j];
       }
-      node.connect(levelGain);
+      node.connect(bqOut);
+      bqOut.connect(levelGain);
+      bqOut.connect(previewGain);
       levelGain.connect(ceiling);
+      previewGain.connect(ceiling);
       ceiling.connect(clipper);
       clipper.connect(ctx.destination);
 
+      wirePreview();
       osc.start();
     } catch (e) {
       post({ ev: 'err', message: 'Graph build failed: ' + e });
       return false;
     }
     return true;
+  }
+
+  // ---- song preview --------------------------------------------------------
+  // A single hidden <audio> element is created once and reused. Its media
+  // element source feeds the common preamp/biquad chain, so the preview hears
+  // exactly the curve the sweep hears. Apple's preview CDN sends
+  // Access-Control-Allow-Origin: *, which keeps createMediaElementSource from
+  // silencing the graph.
+
+  function wirePreview() {
+    if (previewEl || !ctx) return;
+    try {
+      previewEl = document.createElement('audio');
+      previewEl.preload = 'auto';
+      previewEl.crossOrigin = 'anonymous';
+      previewEl.setAttribute('playsinline', '');
+      previewEl.style.display = 'none';
+      if (document.body) document.body.appendChild(previewEl);
+      else document.documentElement.appendChild(previewEl);
+
+      previewSource = ctx.createMediaElementSource(previewEl);
+      previewSource.connect(preampGain);
+
+      previewEl.addEventListener('loadedmetadata', finishPreviewLoad);
+      previewEl.addEventListener('canplay', finishPreviewLoad);
+      previewEl.addEventListener('durationchange', function () {
+        if (!previewLoading) announcePreview();
+      });
+      previewEl.addEventListener('timeupdate', function () {
+        if (!previewLoading) announcePreview();
+      });
+      previewEl.addEventListener('play', function () {
+        if (!previewWantedPlay) return;
+        setPreviewOutput(true);
+        if (!previewLoading) announcePreview('playing');
+      });
+      previewEl.addEventListener('playing', function () {
+        if (!previewWantedPlay) return;
+        setPreviewOutput(true);
+        if (!previewLoading) announcePreview('playing');
+      });
+      previewEl.addEventListener('pause', function () {
+        setPreviewOutput(false);
+        if (previewLoading) return;
+        announcePreview(previewEl.ended ? 'ended' : 'paused');
+      });
+      previewEl.addEventListener('ended', function () {
+        previewWantedPlay = false;
+        setPreviewOutput(false);
+        announcePreview('ended');
+      });
+      previewEl.addEventListener('waiting', function () {
+        if (!previewLoading && previewWantedPlay) announcePreview('loading');
+      });
+      previewEl.addEventListener('error', function () {
+        previewLoading = false;
+        previewWantedPlay = false;
+        setPreviewOutput(false);
+        var code = previewEl.error && previewEl.error.code ? previewEl.error.code : 0;
+        postPreview(
+          'error',
+          previewTime(),
+          previewDuration(),
+          'Preview failed to load' + (code ? ' (error ' + code + ')' : '')
+        );
+      });
+    } catch (e) {
+      previewEl = null;
+      previewSource = null;
+      post({ ev: 'err', message: 'Preview graph failed: ' + e });
+    }
+  }
+
+  function setPreviewOutput(on) {
+    if (!previewGain || !ctx) return;
+    try {
+      previewGain.gain.setTargetAtTime(on ? PREVIEW_LEVEL : 0, ctx.currentTime, 0.005);
+    } catch (e) {}
+  }
+
+  function previewStatus() {
+    if (!previewEl) return 'idle';
+    if (previewEl.ended) return 'ended';
+    return previewEl.paused ? 'paused' : 'playing';
+  }
+
+  function previewTime() {
+    return previewEl && typeof previewEl.currentTime === 'number' ? previewEl.currentTime : 0;
+  }
+
+  function previewDuration() {
+    return previewEl && typeof previewEl.duration === 'number' ? previewEl.duration : 0;
+  }
+
+  function postPreview(status, currentTime, duration, message) {
+    var payload = { ev: 'preview', status: status };
+    if (typeof currentTime === 'number' && isFinite(currentTime)) {
+      payload.currentTime = Math.max(0, currentTime);
+    }
+    if (typeof duration === 'number' && isFinite(duration) && duration > 0) {
+      payload.duration = duration;
+    }
+    if (message) payload.message = message;
+    post(payload);
+  }
+
+  function announcePreview(status, message) {
+    if (previewLoading && status !== 'error') return;
+    postPreview(status || previewStatus(), previewTime(), previewDuration(), message);
+  }
+
+  // The first metadata/canplay event ends the "loading" phase. Play may
+  // already have been requested while the network was fetching; if so, start
+  // it now, otherwise report the paused position.
+  function finishPreviewLoad() {
+    if (!previewLoading) return;
+    previewLoading = false;
+    if (previewWantedPlay && previewEl.paused) startPreviewPlayback();
+    else announcePreview();
+  }
+
+  function startPreviewPlayback() {
+    if (!previewEl) {
+      postPreview('error', 0, 0, 'Preview is not available');
+      return;
+    }
+    if (!previewEl.src) {
+      previewWantedPlay = false;
+      postPreview('error', 0, 0, 'No preview loaded');
+      return;
+    }
+    previewWantedPlay = true;
+    setPreviewOutput(true);
+    var p = null;
+    try {
+      p = previewEl.play();
+    } catch (e) {
+      previewWantedPlay = false;
+      setPreviewOutput(false);
+      postPreview(
+        'error',
+        previewTime(),
+        previewDuration(),
+        'Could not start playback: ' + (e && e.message ? e.message : e)
+      );
+      return;
+    }
+    if (p && typeof p.catch === 'function') {
+      p.catch(function (e) {
+        if (!previewWantedPlay) return;
+        previewWantedPlay = false;
+        setPreviewOutput(false);
+        postPreview(
+          'error',
+          previewTime(),
+          previewDuration(),
+          'Could not start playback: ' + (e && e.message ? e.message : e)
+        );
+      });
+    }
+  }
+
+  function loadPreview(url) {
+    if (!previewEl) {
+      postPreview('error', 0, 0, 'Preview is not available');
+      return;
+    }
+    if (typeof url !== 'string' || !url) {
+      postPreview('error', 0, 0, 'No preview URL');
+      return;
+    }
+    previewWantedPlay = false;
+    previewLoading = true;
+    setPreviewOutput(false);
+    // Assigning src aborts the previous resource and pauses it; calling
+    // pause() here as well would queue a stale pause event for the new track.
+    try {
+      previewEl.src = url;
+      previewEl.load();
+    } catch (e) {
+      previewLoading = false;
+      postPreview('error', 0, 0, 'Could not load preview: ' + e);
+      return;
+    }
+    postPreview('loading', 0, 0);
+  }
+
+  function playPreview() {
+    if (!previewEl) {
+      postPreview('error', 0, 0, 'Preview is not available');
+      return;
+    }
+    if (ctx) resumeCtx();
+    startPreviewPlayback();
+  }
+
+  function pausePreview() {
+    if (!previewEl) return;
+    previewWantedPlay = false;
+    setPreviewOutput(false);
+    try { previewEl.pause(); } catch (e) {}
+    if (previewEl.ended) announcePreview('ended');
+    else announcePreview('paused');
+  }
+
+  function stopPreview() {
+    if (!previewEl) return;
+    previewWantedPlay = false;
+    setPreviewOutput(false);
+    try { previewEl.pause(); } catch (e) {}
+    try { previewEl.currentTime = 0; } catch (e) {}
+    announcePreview('paused');
+  }
+
+  function seekPreview(seconds) {
+    if (!previewEl) return;
+    var t = Number(seconds);
+    if (!isFinite(t)) return;
+    var d = previewEl.duration;
+    if (isFinite(d) && d > 0) t = Math.min(d, Math.max(0, t));
+    else t = Math.max(0, t);
+    try { previewEl.currentTime = t; } catch (e) {}
+    announcePreview(previewEl.paused ? (previewEl.ended ? 'ended' : 'paused') : 'playing');
   }
 
   function started() {
@@ -228,11 +472,31 @@ export const ENGINE_JS = `
           break;
         case 'play':
           playing = true;
+          previewWantedPlay = false;
+          setPreviewOutput(false);
+          if (previewEl && !previewEl.paused) {
+            try { previewEl.pause(); } catch (e) {}
+          }
           if (ctx) { resumeCtx(); fade(1); }
           break;
         case 'stop':
           playing = false;
           fade(0);
+          break;
+        case 'previewLoad':
+          loadPreview(msg.url);
+          break;
+        case 'previewPlay':
+          playPreview();
+          break;
+        case 'previewPause':
+          pausePreview();
+          break;
+        case 'previewStop':
+          stopPreview();
+          break;
+        case 'previewSeek':
+          seekPreview(msg.seconds);
           break;
         case 'freq':
           if (typeof msg.hz === 'number' && msg.hz > 0) {
@@ -280,8 +544,17 @@ export const ENGINE_HTML = ENGINE_HTML_PREFIX + ENGINE_JS + ENGINE_HTML_SUFFIX;
 
 // --- protocol types ---------------------------------------------------------
 
+export type PreviewStatus = "idle" | "loading" | "playing" | "paused" | "ended" | "error";
+
 export type WebViewEngineEvent =
   | { ev: "ready" }
   | { ev: "ctx"; state: "running" | "suspended" | "closed" | "interrupted" | "unknown" }
   | { ev: "err"; message: string }
-  | { ev: "pong" };
+  | { ev: "pong" }
+  | {
+      ev: "preview";
+      status: PreviewStatus;
+      currentTime?: number;
+      duration?: number;
+      message?: string;
+    };

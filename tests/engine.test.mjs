@@ -83,22 +83,86 @@ class AudioContext {
     w.oversample = "";
     return w;
   }
+  createMediaElementSource(el) {
+    const n = new Node(this);
+    n.mediaElement = el;
+    return n;
+  }
   resume() {
     this.state = "running";
     return Promise.resolve();
   }
 }
 
+class FakeAudioElement {
+  constructor() {
+    this.listeners = new Map();
+    this.src = "";
+    this.currentTime = 0;
+    this.duration = 0;
+    this.paused = true;
+    this.ended = false;
+    this.error = null;
+    this.preload = "";
+    this.crossOrigin = "";
+    this.style = {};
+    this.playCalls = 0;
+  }
+  addEventListener(type, fn) {
+    if (!this.listeners.has(type)) this.listeners.set(type, []);
+    this.listeners.get(type).push(fn);
+  }
+  dispatch(type) {
+    for (const fn of this.listeners.get(type) || []) fn({ type });
+  }
+  setAttribute() {}
+  play() {
+    this.playCalls += 1;
+    this.paused = false;
+    this.ended = false;
+    this.dispatch("play");
+    return Promise.resolve();
+  }
+  pause() {
+    this.paused = true;
+    this.dispatch("pause");
+  }
+  load() {
+    this.currentTime = 0;
+    this.duration = 0;
+    this.paused = true;
+    this.ended = false;
+    this.dispatch("emptied");
+  }
+  finishLoad(duration = 30) {
+    this.duration = duration;
+    this.dispatch("loadedmetadata");
+    this.dispatch("canplay");
+  }
+}
+
 function boot(Ctor = AudioContext) {
   const events = [];
+  const audioElements = [];
+  const document = {
+    createElement(tag) {
+      assert.equal(tag, "audio");
+      const el = new FakeAudioElement();
+      audioElements.push(el);
+      return el;
+    },
+    body: { appendChild() {} },
+    documentElement: { appendChild() {} },
+  };
   const win = {
     AudioContext: Ctor,
     ReactNativeWebView: {
       postMessage: (s) => events.push(JSON.parse(s)),
     },
+    document,
   };
-  Function("window", `"use strict";\n${ENGINE_JS}`)(win);
-  return { win, events, engine: win.__engine };
+  Function("window", "document", `"use strict";\n${ENGINE_JS}`)(win, document);
+  return { win, events, audioElements, engine: win.__engine, document };
 }
 
 function findNode(ctx, predicate) {
@@ -186,14 +250,16 @@ function findNode(ctx, predicate) {
     n = n.outputs[0];
     chain.push(n);
   }
-  // chain = toneGain, preamp, bq0..bq15, levelGain, ceiling, clipper, destination
+  // chain = toneGain, preamp, bq0..bq15, bqOut, levelGain, ceiling, clipper, destination
   const toneGain = chain[0];
   assert.ok(toneGain && toneGain.gain, "toneGain wired first after osc");
   const biquads = []; // chain.slice(2, 18)
   for (let i = 2; i < 2 + BAND_COUNT; i++) assert.ok(chain[i].Q, `biquad at slot ${i}`);
   biquads.push(...chain.slice(2, 2 + BAND_COUNT));
-  const levelGain = chain[2 + BAND_COUNT];
-  assert.ok(levelGain && levelGain.gain, "levelGain after biquads");
+  const bqOut = chain[2 + BAND_COUNT];
+  const levelGain = chain[3 + BAND_COUNT];
+  assert.ok(bqOut && bqOut.gain, "bqOut after biquads");
+  assert.ok(levelGain && levelGain.gain, "levelGain after bqOut");
   const preamp = chain[1];
   assert.ok(preamp.gain, "preamp before biquads");
 
@@ -269,6 +335,108 @@ function findNode(ctx, predicate) {
   E.handle({ cmd: "eq", bands: [], eqOn: false, preampDb: 0 });
   for (const bq of biquads) assert.equal(bq.gain.events.at(-1).v, 0);
   assert.ok(Math.abs(preamp.gain.events.at(-1).v - 1) < 1e-9);
+}
+
+// ---- song preview ----------------------------------------------------------
+
+{
+  const ctxs = [];
+  class AC extends AudioContext {
+    constructor() {
+      super();
+      ctxs.push(this);
+    }
+  }
+  const { engine: E, events, audioElements } = boot(AC);
+  E.handle({ cmd: "start" });
+  const ctx = ctxs[0];
+  const el = audioElements[0];
+  assert.ok(el, "preview audio element created");
+  assert.equal(el.crossOrigin, "anonymous");
+  assert.equal(el.style.display, "none");
+
+  const previewEvents = () => events.filter((e) => e.ev === "preview");
+  const lastPreview = () => previewEvents().at(-1);
+
+  // The media source joins the common preamp/biquad chain, then exits through
+  // its own post-EQ gain (not the tone level control) into the shared ceiling.
+  const osc = findNode(ctx, (n) => n.frequency && n.started);
+  const preamp = osc.outputs[0].outputs[0];
+  const source = findNode(ctx, (n) => n.mediaElement === el);
+  assert.ok(source, "media element source exists");
+  assert.equal(source.outputs[0], preamp, "preview enters the common preamp");
+
+  const chain = [];
+  let n = osc;
+  for (let i = 0; i < 24 && n.outputs.length; i++) {
+    n = n.outputs[0];
+    chain.push(n);
+  }
+  const bqOut = chain[2 + BAND_COUNT];
+  const levelGain = chain[3 + BAND_COUNT];
+  const previewGain = bqOut.outputs.find((x) => x !== levelGain && x.gain);
+  assert.ok(previewGain, "preview output gain after the biquads");
+  assert.equal(previewGain.outputs[0], chain[4 + BAND_COUNT], "preview joins the ceiling");
+  // The preview branch is post-biquad but must be muted unless a song is
+  // playing; otherwise the tone bypasses levelGain through it.
+  assert.equal(previewGain.gain.value, 0, "preview branch muted while idle");
+
+  // A play request with no source is a friendly error, not a crash.
+  E.handle({ cmd: "previewPlay" });
+  assert.equal(lastPreview().status, "error");
+  assert.match(lastPreview().message, /No preview loaded/);
+
+  E.handle({ cmd: "previewLoad", url: "https://example.test/song.m4a" });
+  assert.equal(el.src, "https://example.test/song.m4a");
+  assert.equal(lastPreview().status, "loading");
+  assert.equal(lastPreview().currentTime, 0);
+
+  E.handle({ cmd: "previewPlay" });
+  assert.equal(el.playCalls, 1);
+  // Metadata resolves after the play request; the loading gate opens and the
+  // element is already unpaused, so the engine reports playing.
+  el.finishLoad(30);
+  assert.equal(lastPreview().status, "playing");
+  assert.equal(lastPreview().duration, 30);
+  assert.ok(previewGain.gain.value > 0, "preview branch opens for playback");
+
+  el.currentTime = 12.5;
+  el.dispatch("timeupdate");
+  assert.equal(lastPreview().status, "playing");
+  assert.equal(lastPreview().currentTime, 12.5);
+
+  E.handle({ cmd: "previewPause" });
+  assert.equal(el.paused, true);
+  assert.equal(lastPreview().status, "paused");
+  assert.equal(previewGain.gain.value, 0, "preview branch closes on pause");
+
+  E.handle({ cmd: "previewSeek", seconds: 7.5 });
+  assert.equal(el.currentTime, 7.5);
+  assert.equal(lastPreview().status, "paused");
+  assert.equal(lastPreview().currentTime, 7.5);
+
+  E.handle({ cmd: "previewStop" });
+  assert.equal(el.currentTime, 0);
+  assert.equal(lastPreview().status, "paused");
+  assert.equal(lastPreview().currentTime, 0);
+
+  // Starting the sweep tone pauses a running preview; the two sources never
+  // intentionally play over each other.
+  E.handle({ cmd: "previewPlay" });
+  assert.equal(lastPreview().status, "playing");
+  assert.ok(previewGain.gain.value > 0);
+  E.handle({ cmd: "play" });
+  assert.equal(el.paused, true);
+  assert.equal(lastPreview().status, "paused");
+  assert.equal(previewGain.gain.value, 0, "tone play closes the preview branch");
+
+  // A media error is surfaced with the element's error code.
+  E.handle({ cmd: "previewLoad", url: "https://example.test/bad.m4a" });
+  el.error = { code: 4 };
+  el.dispatch("error");
+  assert.equal(lastPreview().status, "error");
+  assert.match(lastPreview().message, /error 4/);
+  assert.equal(previewGain.gain.value, 0, "preview branch closes on error");
 }
 
 {

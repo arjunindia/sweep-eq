@@ -1,6 +1,7 @@
 // App root: theme + system chrome, restored session, the audio bridge
 // (hidden WebView), and the store→engine wiring. The gate dialog lives in
-// TuneScreen so audio can only start from a deliberate user gesture.
+// TuneScreen and PreviewScreen so audio can only start from a deliberate
+// user gesture.
 
 import { useEffect } from "react";
 import { AppState as RNAppState, StatusBar, View } from "react-native";
@@ -77,7 +78,8 @@ export default function App() {
     return store.subscribe(push);
   }, []);
 
-  // Leaving the foreground stops the tone and flushes autosave.
+  // Leaving the foreground stops the tone, pauses a song preview, and
+  // flushes autosave.
   useEffect(() => {
     const sub = RNAppState.addEventListener("change", (st) => {
       if (st !== "active") {
@@ -85,6 +87,7 @@ export default function App() {
           engine.stop();
           store.setPlaying(false);
         }
+        engine.pausePreview();
         persist.flush();
       }
     });

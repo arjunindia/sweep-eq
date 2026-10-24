@@ -4,10 +4,14 @@
 // setBands(). Commands are coalesced so dragging the sweep at ~120 Hz does
 // not flood the bridge; the latest value always wins.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { WebView as WebViewExport } from "react-native-webview";
 import type { StyleProp, ViewStyle } from "react-native";
-import { ENGINE_HTML, type WebViewEngineEvent } from "./engineSource.ts";
+import {
+  ENGINE_HTML,
+  type PreviewStatus,
+  type WebViewEngineEvent,
+} from "./engineSource.ts";
 import type { FilterBand } from "../lib/dsp.ts";
 
 // Minimal contract of the WebView the bridge actually relies on. RNW 14's
@@ -49,7 +53,27 @@ export interface CompactBand {
   e: boolean;
 }
 
+export interface PreviewState {
+  status: PreviewStatus;
+  currentTime: number;
+  duration: number;
+  error: string | null;
+}
+
 type StatusListener = () => void;
+
+const PREVIEW_STATUSES: readonly PreviewStatus[] = [
+  "idle",
+  "loading",
+  "playing",
+  "paused",
+  "ended",
+  "error",
+];
+
+function isPreviewStatus(value: unknown): value is PreviewStatus {
+  return typeof value === "string" && (PREVIEW_STATUSES as readonly string[]).includes(value);
+}
 
 type Desired = {
   freq: number;
@@ -77,6 +101,18 @@ class WebViewAudioEngine {
   ctxState: "suspended" | "running" | "closed" | "unknown" | null = null;
   private statusListeners = new Set<StatusListener>();
 
+  // Song preview state. The native UI subscribes through usePreviewState();
+  // the WebView remains the source of truth for the media element.
+  private preview: PreviewState = {
+    status: "idle",
+    currentTime: 0,
+    duration: 0,
+    error: null,
+  };
+  private previewListeners = new Set<StatusListener>();
+  private previewUrl: string | null = null;
+  private previewWanted = false;
+
   private throttle = new Map<string, Record<string, unknown>>();
   private throttleTimer: ReturnType<typeof setInterval> | null = null;
   private lastFreqPostAt = 0;
@@ -95,6 +131,24 @@ class WebViewAudioEngine {
 
   private emit() {
     for (const fn of this.statusListeners) fn();
+  }
+
+  getPreview = (): PreviewState => this.preview;
+
+  subscribePreview = (fn: StatusListener): (() => void) => {
+    this.previewListeners.add(fn);
+    return () => {
+      this.previewListeners.delete(fn);
+    };
+  };
+
+  private emitPreview() {
+    for (const fn of this.previewListeners) fn();
+  }
+
+  private updatePreview(next: PreviewState) {
+    this.preview = next;
+    this.emitPreview();
   }
 
   // Ready-subscribers (used by the gate to know the engine can receive).
@@ -172,6 +226,12 @@ class WebViewAudioEngine {
     this.post({ cmd: "level", db: this.wanted.levelDb });
     this.post({ cmd: "eq", ...this.wanted.eq });
     if (this.wanted.playing) this.post({ cmd: "play" });
+    // A WebView reload loses the media element. Re-load the selected clip
+    // only once the graph has been asked to build.
+    if (this.startSent && this.previewUrl) {
+      this.post({ cmd: "previewLoad", url: this.previewUrl });
+      if (this.previewWanted) this.post({ cmd: "previewPlay" });
+    }
   }
 
   async start(): Promise<void> {
@@ -190,6 +250,9 @@ class WebViewAudioEngine {
   }
 
   play() {
+    // The two sources share the graph; never let a preview run underneath the
+    // sweep even if a caller forgot to coordinate.
+    this.pausePreview();
     this.wanted.playing = true;
     this.post({ cmd: "play" });
   }
@@ -246,6 +309,52 @@ class WebViewAudioEngine {
     this.schedule("eq", { cmd: "eq", ...this.wanted.eq });
   }
 
+  // ---- song preview --------------------------------------------------------
+
+  playPreview(url: string) {
+    if (!url) return;
+    // Likewise, a preview always wins over a running tone.
+    if (this.wanted.playing) this.stop();
+    if (url !== this.previewUrl || this.preview.status === "error") {
+      this.previewUrl = url;
+      this.previewWanted = true;
+      this.updatePreview({ status: "loading", currentTime: 0, duration: 0, error: null });
+      this.post({ cmd: "previewLoad", url });
+    } else if (this.preview.status === "ended") {
+      // play() after ended stays at the end in some WebViews; rewind first.
+      this.seekPreview(0);
+    }
+    this.previewWanted = true;
+    this.post({ cmd: "previewPlay" });
+  }
+
+  pausePreview() {
+    this.previewWanted = false;
+    if (!this.previewUrl) return;
+    if (this.preview.status === "playing" || this.preview.status === "loading") {
+      this.updatePreview({ ...this.preview, status: "paused" });
+    }
+    this.post({ cmd: "previewPause" });
+  }
+
+  stopPreview() {
+    this.previewWanted = false;
+    this.updatePreview({
+      ...this.preview,
+      status: this.previewUrl ? "paused" : "idle",
+      currentTime: 0,
+    });
+    this.post({ cmd: "previewStop" });
+  }
+
+  seekPreview(seconds: number) {
+    if (!Number.isFinite(seconds)) return;
+    const max = this.preview.duration > 0 ? this.preview.duration : seconds;
+    const t = Math.max(0, Math.min(max, seconds));
+    this.updatePreview({ ...this.preview, currentTime: t });
+    this.post({ cmd: "previewSeek", seconds: t });
+  }
+
   handleMessage(event?: WebViewMessage | string) {
     const raw = typeof event === "string" ? event : event?.nativeEvent?.data;
     if (!raw) return;
@@ -270,10 +379,35 @@ class WebViewAudioEngine {
         this.ctxState = "unknown";
       }
       this.emit();
+    } else if (ev.ev === "preview") {
+      const status = isPreviewStatus(ev.status) ? ev.status : "idle";
+      const currentTime =
+        typeof ev.currentTime === "number" && Number.isFinite(ev.currentTime)
+          ? Math.max(0, ev.currentTime)
+          : this.preview.currentTime;
+      const duration =
+        typeof ev.duration === "number" && Number.isFinite(ev.duration) && ev.duration > 0
+          ? ev.duration
+          : this.preview.duration;
+      if (status === "paused" || status === "ended" || status === "error") {
+        this.previewWanted = false;
+      } else if (status === "playing") {
+        this.previewWanted = true;
+      }
+      this.updatePreview({
+        status,
+        currentTime,
+        duration,
+        error: status === "error" ? ev.message || "Preview failed" : null,
+      });
     } else if (ev.ev === "err") {
       console.warn("[audio]", ev.message);
     }
   }
+}
+
+export function usePreviewState(): PreviewState {
+  return useSyncExternalStore(engine.subscribePreview, engine.getPreview, engine.getPreview);
 }
 
 export const engine = new WebViewAudioEngine();

@@ -1,12 +1,14 @@
-// Bottom navigation — four destinations matching the natural flow:
-// sweep+mark audio ("Tune"), inspect bands ("Curve"), take it away ("Export"),
-// and app-level preferences ("Settings").
+// Bottom navigation — five destinations matching the natural flow:
+// sweep+mark audio ("Tune"), inspect bands ("Curve"), hear the curve on a
+// real song ("Preview"), take it away ("Export"), and app-level preferences
+// ("Settings").
 
 import { StyleSheet } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { TuneScreen } from "../screens/TuneScreen.tsx";
 import { CurveScreen } from "../screens/CurveScreen.tsx";
+import { PreviewScreen } from "../screens/PreviewScreen.tsx";
 import { ExportScreen } from "../screens/ExportScreen.tsx";
 import { SettingsScreen } from "../screens/SettingsScreen.tsx";
 import { usePalette } from "../theme/theme.ts";
@@ -17,6 +19,7 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 const ICONS = {
   Tune: "equalizer",
   Curve: "chart-line",
+  Preview: "headphones",
   Export: "share-variant",
   Settings: "cog-outline",
 } as const;
@@ -55,6 +58,7 @@ export function RootTabs() {
     >
       <Tab.Screen name="Tune" component={TuneScreen} options={{ title: "Tune" }} />
       <Tab.Screen name="Curve" component={CurveScreen} options={{ title: "Curve" }} />
+      <Tab.Screen name="Preview" component={PreviewScreen} options={{ title: "Preview" }} />
       <Tab.Screen name="Export" component={ExportScreen} options={{ title: "Export" }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: "Settings" }} />
     </Tab.Navigator>
