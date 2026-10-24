@@ -109,6 +109,13 @@ The release job attaches `SweepEQ.apk`, `SweepEQ.ipa`, `apps.json`, and
 
 ### Install via AltStore Classic
 
+<a href="https://altstore.io/source/github.com/arjunindia/sweep-eq/releases/latest/download/apps.json?app=com.sweepeq.app">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-dark.png">
+    <img src="https://raw.githubusercontent.com/arjunindia/sweep-eq/main/assets/altstore-badge-light.png" alt="Download on AltStore" width="245">
+  </picture>
+</a>
+
 AltStore Classic re-signs the unsigned IPA with your Apple ID, so no paid
 developer account is required. Add this source URL in AltStore Classic:
 
