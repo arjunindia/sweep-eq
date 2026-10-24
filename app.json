@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Sweep EQ",
+    "slug": "sweep-eq",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/sweep-eq-icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1415",
+        "foregroundImage": "./assets/sweep-eq-android-foreground.png",
+        "backgroundImage": "./assets/sweep-eq-android-background.png",
+        "monochromeImage": "./assets/sweep-eq-android-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/sweep-eq-favicon.png"
+    },
+    "plugins": [
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/sweep-eq-splash.png",
+          "backgroundColor": "#0E1415",
+          "imageWidth": 160
+        }
+      ]
+    ]
+  }
+}
